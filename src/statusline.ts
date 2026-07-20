@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readStatus } from "./lib/status.js";
+import { fmt } from "./lib/format.js";
 
 interface StdinData {
   session_id?: string;
@@ -17,13 +18,6 @@ const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
-
-function fmt(n: number | null | undefined): string {
-  if (!n || n <= 0) return "0";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));

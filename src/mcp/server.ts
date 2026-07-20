@@ -13,6 +13,7 @@ import { readStatus } from "../lib/status.js";
 import { loadConfig } from "../lib/config.js";
 import { daemonPid } from "../lib/daemon-ctl.js";
 import { compressSession } from "../lib/compressor.js";
+import { fmt } from "../lib/format.js";
 
 const server = new McpServer({ name: "context-engine", version: "0.1.0" });
 
@@ -131,6 +132,43 @@ server.registerTool(
       );
     }
     return text(lines.join("\n"));
+  }
+);
+
+server.registerTool(
+  "get_savings",
+  {
+    description:
+      "Show how much of the conversation has already been compressed: compression rate (percent) plus raw token counts. Without session_id, targets the most recently active session of the current project.",
+    inputSchema: { session_id: z.string().optional().describe("Claude Code session id (optional)") },
+  },
+  async ({ session_id }) => {
+    const sid = pickSessionId(session_id);
+    if (!sid) return text("No registered session found (is the plugin's SessionStart hook active?).");
+    const s = readStatus(sid);
+    if (!s) return text(`Session ${sid}: no status yet (daemon may not have polled it).`);
+
+    const backlogLine = `Backlog:      ${fmt(s.backlogTokens)} tokens (${s.backlogMessages} msgs, not yet compressed)`;
+    if (s.compressions === 0 || s.totalRawTokens <= 0) {
+      return text(
+        `Session ${sid}\n` +
+          `Compressed:   nothing yet\n` +
+          `${backlogLine}\n` +
+          `Context now:  ${fmt(s.contextTokens)} tokens`
+      );
+    }
+
+    const savedPct = Math.round((s.totalSavedTokens / s.totalRawTokens) * 100);
+    const compressedTo = Math.max(0, s.totalRawTokens - s.totalSavedTokens);
+    return text(
+      `Session ${sid}\n` +
+        `Compressed:   ${fmt(s.totalRawTokens)} → ${fmt(compressedTo)} tokens\n` +
+        `Saved:        ${fmt(s.totalSavedTokens)} tokens (${savedPct}%)\n` +
+        `Compressions: ${s.compressions}\n` +
+        `${backlogLine}\n` +
+        `Context now:  ${fmt(s.contextTokens)} tokens` +
+        (s.lastCompressionAt ? `\nLast:         ${s.lastCompressionAt}` : "")
+    );
   }
 );
 

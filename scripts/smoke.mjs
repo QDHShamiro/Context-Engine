@@ -104,6 +104,16 @@ check("rolling range continues", !!row2 && !!row1 && row2.from_line === row1.to_
 const hits = db.searchSummaries("File", null, 5);
 check("search finds summaries", hits.length > 0);
 
+const savingsStatus = statusMod.readStatus(sessionId);
+const savedPct =
+  savingsStatus.totalRawTokens > 0
+    ? Math.round((savingsStatus.totalSavedTokens / savingsStatus.totalRawTokens) * 100)
+    : 0;
+const compressedTo = savingsStatus.totalRawTokens - savingsStatus.totalSavedTokens;
+check("savings: raw > saved", savingsStatus.totalRawTokens > savingsStatus.totalSavedTokens, JSON.stringify(savingsStatus));
+check("savings: rate in 0..100", savedPct > 0 && savedPct <= 100, `pct=${savedPct}`);
+check("savings: compressed-to < compressed-from", compressedTo >= 0 && compressedTo < savingsStatus.totalRawTokens);
+
 const { compressSession } = await import(pathToUrl("dist/lib/compressor.js"));
 const skip = await compressSession("does-not-exist");
 check("unknown session skipped gracefully", skip.compressed === false);

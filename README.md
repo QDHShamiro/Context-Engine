@@ -140,6 +140,7 @@ Runs entirely on its own. Manual controls when you want them:
 | Command / tool | Effect |
 |---|---|
 | `/context-engine:status` | Sessions, backlog, compressions, daemon state |
+| `/context-engine:already-saved` | Compression rate: how much has already been compressed (% + tokens) |
 | `/context-engine:compress` | Force a compression right now |
 | `/context-engine:recall` | Load the latest summary into Claude's context |
 | MCP `get_compressed_context` | Latest summary (Claude also calls this itself when useful) |
