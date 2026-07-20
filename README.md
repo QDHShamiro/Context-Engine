@@ -6,10 +6,13 @@
 
 A local daemon watches your session transcripts, and once a threshold is hit, it summarizes older history via the Anthropic API into a rolling, self-contained summary. Claude pulls it back in via MCP instead of re-reading everything — and it's injected automatically on resume.
 
+[![Repo](https://img.shields.io/badge/GitHub-QDHShamiro%2FContext--Engine-181717?logo=github&logoColor=white)](https://github.com/QDHShamiro/Context-Engine)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-plugin-D97757?logo=anthropic&logoColor=white)](https://code.claude.com/docs/en/plugins)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
+
+**→ [github.com/QDHShamiro/Context-Engine](https://github.com/QDHShamiro/Context-Engine)**
 
 </div>
 
@@ -24,6 +27,17 @@ Fable 5 | my-project | ctx 62.3k 31% | CE backlog 4.1k · ✓ 2m ago · saved 41
 ```
 *(statusline, live)*
 
+`/context-engine:already-saved` shows exactly how much has been compressed so far:
+
+```
+Session abc123
+Compressed:   84.2k → 6.1k tokens
+Saved:        78.1k tokens (93%)
+Compressions: 4
+Backlog:      4.1k tokens (12 msgs, not yet compressed)
+Context now:  62.3k tokens
+```
+
 ## What it actually does
 
 | ✅ Real | ❌ Not possible (and not faked) |
@@ -36,6 +50,19 @@ Fable 5 | my-project | ctx 62.3k 31% | CE backlog 4.1k · ✓ 2m ago · saved 41
 | Statusline: live context size + compression state + tokens saved | |
 
 Think of it as a **parallel memory layer**, not a replacement for `/compact`. It makes `/compact` and `/clear` safe (nothing is lost) and gives you cross-session memory on top.
+
+## Screenshots
+
+> Add your own captures here — the statusline in action, `/context-engine:status`, and `/context-engine:already-saved`.
+
+| Statusline | `/already-saved` |
+|---|---|
+| _(screenshot)_ | _(screenshot)_ |
+
+<!--
+![statusline](docs/statusline.png)
+![already-saved](docs/already-saved.png)
+-->
 
 ## Architecture
 
