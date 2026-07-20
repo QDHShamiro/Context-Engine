@@ -1,0 +1,9 @@
+{
+  "name": "context-engine",
+  "version": "0.1.0",
+  "description": "Automatic background compression of Claude Code conversation history: daemon + hooks + MCP tools + statusline.",
+  "author": {
+    "name": "Shamiro"
+  },
+  "keywords": ["context", "compression", "memory", "tokens"]
+}

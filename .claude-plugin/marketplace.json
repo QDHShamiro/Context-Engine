@@ -1,0 +1,14 @@
+{
+  "name": "context-engine-market",
+  "description": "Local marketplace for the Context Engine plugin.",
+  "owner": {
+    "name": "Shamiro"
+  },
+  "plugins": [
+    {
+      "name": "context-engine",
+      "source": "./",
+      "description": "Automatic background compression of Claude Code conversation history."
+    }
+  ]
+}
