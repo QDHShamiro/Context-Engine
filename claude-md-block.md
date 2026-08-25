@@ -35,4 +35,8 @@ Rules:
 - Delete entries that stopped being true. Never append a correction under a stale line.
 - Whole file stays under ~60 lines. Past that, compress the oldest `Decisions` into one line.
 - No code, logs, diffs, or file dumps. It is a memo, not a changelog; git has the changelog.
+
+A Stop hook checks this once per session: if the repo changed and the memo did not, it blocks
+and asks for the update. Do not wait for that block — writing the entry when the work lands is
+the point, and a memo written at the end from memory is the one that gets details wrong.
 <!-- END context-memory -->

@@ -38,17 +38,20 @@ fi
 "$PY" - "$CLAUDE_DIR/settings.json" "$CLAUDE_DIR/CLAUDE.md" "$REPO/claude-md-block.md" \
       "$(cmd_for session-start-context.sh)" \
       "$(cmd_for pre-compact-backup.sh)" \
-      "$(cmd_for session-end-log.sh)" <<'PY'
+      "$(cmd_for session-end-log.sh)" \
+      "$(cmd_for stop-memo-check.sh)" <<'PY'
 import io, json, os, shutil, sys
 
 settings, claude_md, block_file = sys.argv[1:4]
-start_cmd, compact_cmd, end_cmd = sys.argv[4:7]
+start_cmd, compact_cmd, end_cmd, stop_cmd = sys.argv[4:8]
 MARK = "context-memory"
 
+# Stop takes no matcher: it always fires.
 SPECS = [
     ("SessionStart", "startup|resume|compact", start_cmd,   15),
     ("PreCompact",   "manual|auto",            compact_cmd, 30),
     ("SessionEnd",   "*",                      end_cmd,     10),
+    ("Stop",         None,                     stop_cmd,    10),
 ]
 
 data = {}
@@ -60,15 +63,16 @@ if os.path.exists(settings):
 hooks = data.setdefault("hooks", {})
 for event, matcher, command, timeout in SPECS:
     kept = [g for g in hooks.get(event, []) if MARK not in json.dumps(g)]
-    kept.append({
-        "matcher": matcher,
-        "hooks": [{"type": "command", "command": command, "timeout": timeout}],
-    })
+    group = {"hooks": [{"type": "command", "command": command, "timeout": timeout}]}
+    if matcher:
+        group = dict(matcher=matcher, **group)
+    kept.append(group)
     hooks[event] = kept
 
 with io.open(settings, "w", encoding="utf-8") as fh:
     fh.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
-print("settings: SessionStart, PreCompact, SessionEnd registered (backup: settings.json.bak)")
+print("settings: %s registered (backup: settings.json.bak)"
+      % ", ".join(e for e, _, _, _ in SPECS))
 
 BEGIN, END = "<!-- BEGIN context-memory -->", "<!-- END context-memory -->"
 block = io.open(block_file, encoding="utf-8").read().strip()

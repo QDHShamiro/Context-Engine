@@ -15,6 +15,11 @@ if [ -n "$SRC" ] && [ -f "$SRC" ]; then
   mkdir -p "$DIR" 2>/dev/null
   STAMP=$(date +%Y%m%d-%H%M%S)
   cp "$SRC" "$DIR/${STAMP}-${TRIGGER:-unknown}.jsonl" 2>/dev/null || true
+
+  # Transcripts run to megabytes and one lands here per compaction, so keep only
+  # the newest few. Raise with CE_KEEP_BACKUPS in the hook's environment.
+  ls -1t "$DIR"/*.jsonl 2>/dev/null | tail -n "+$((${CE_KEEP_BACKUPS:-5} + 1))" \
+    | while IFS= read -r old; do rm -f "$old"; done
 fi
 
 exit 0

@@ -10,6 +10,14 @@ ce_debug "$ROOT"
 CTX="$ROOT/.claude/memory/PROJECT_CONTEXT.md"
 LOG=""
 
+# Stamp the start of the working session: the Stop hook compares the memo's mtime
+# and the repo's HEAD against this to decide whether anything went unrecorded.
+# Compaction restarts the session but not the work, so its stamp is left alone.
+if [ "$CE_session_start_reason" != compact ]; then
+  printf '%s\n%s\n' "$CE_session_id" "$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)" \
+    > "$(ce_memdir "$ROOT")/.session" 2>/dev/null || true
+fi
+
 [ -f "$CTX" ] && LOG=$(cat "$CTX")
 COMMITS=$(git -C "$ROOT" log -5 --format='%h %ad %s' --date=short 2>/dev/null)
 
