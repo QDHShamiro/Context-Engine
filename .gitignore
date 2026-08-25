@@ -1,0 +1,7 @@
+# Local working state produced by the hooks themselves. The versioned part of
+# this repo is the setup (hooks/, install.sh), never the memory it generates.
+.claude/memory/
+.claude-flow/
+node_modules/
+.claude/proven-config.json
+.claude/.proven-config-version
