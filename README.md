@@ -29,8 +29,9 @@ you open a repo you last touched three weeks ago and Claude knows nothing about 
 the first ten minutes re-explaining, or it spends them re-reading files. Replaying the raw
 transcript is worse — it is the whole conversation, tool output included, at full token cost.
 
-This keeps one short Markdown memo per project and injects it at session start instead. Same
-continuity, a fraction of the tokens, and it maintains itself.
+This keeps a short rolling memo per project and injects it at session start instead, with the
+detail archived in per-session notes that are listed but not loaded. Same continuity, a fraction of
+the tokens, and it maintains itself.
 
 ---
 
@@ -89,9 +90,10 @@ project**, with nothing to install per repo.
 
 ### `SessionStart` → inject the memo
 
-Prints `PROJECT_CONTEXT.md` followed by the last five commits. `SessionStart` is one of the few
-events whose plain stdout is added to Claude's context, so this is what Claude sees before your
-first message.
+Prints `PROJECT_CONTEXT.md`, the last five commits, and an index of the archived session notes -
+each by filename and its own title line, so Claude can tell which one is worth opening without any
+of them being loaded. `SessionStart` is one of the few events whose plain stdout is added to
+Claude's context, so this is what Claude sees before your first message.
 
 If neither the memo nor a git log exists it prints **nothing** and exits 0, so a scratch directory
 costs zero tokens.
@@ -227,8 +229,10 @@ Per project, all inside `<project>/.claude/memory/`:
 
 | | |
 |---|---|
-| `PROJECT_CONTEXT.md` | The memo. The only file you would ever edit by hand. |
+| `PROJECT_CONTEXT.md` | The rolling memo - where the project is now. Injected every session start. |
+| `sessions/Session_Context_<date>_<id>.md` | One note per session: what was done, why, what was tried and rejected. Listed at session start, read on demand. |
 | `SESSION_LOG.md` | One row per session. |
+| `.starts` | One line per session start that actually received the memo. Backs the savings figure. |
 | `backups/` | Pre-compaction transcripts, newest 5. |
 | `.session` | Session stamp: id, HEAD, and `nagged` once the Stop check has fired. |
 | `.no-nag` | Optional. Disables the Stop check in this project. |
@@ -251,8 +255,17 @@ At user level:
 
 ## The memo
 
-`PROJECT_CONTEXT.md` is maintained by Claude, not by you. The block appended to `~/.claude/CLAUDE.md`
-tells it to update the file after each finished feature, fix, or architecture decision. Shape:
+Two files, different jobs, and the difference is the whole design:
+
+| File | Injected at session start? | Therefore |
+|---|---|---|
+| `PROJECT_CONTEXT.md` | **Yes, every time** | Must stay short. You pay for it forever. |
+| `sessions/Session_Context_<date>_<id>.md` | No — only its name and title are listed | Can hold the detail. Written once, read on demand. |
+
+Both are maintained by Claude, not by you: the block `install.sh` appends to `~/.claude/CLAUDE.md`
+sets the rules and the split.
+
+`PROJECT_CONTEXT.md` is where the project *is*, right now:
 
 ```markdown
 # myproject — Context
@@ -271,17 +284,20 @@ One or two lines.
 - <next thing, blocker, or deferred item>
 ```
 
-The rules that ship in `CLAUDE.md`:
+- **Written in English**, whatever language you work in. It is re-read at every session start for
+  the life of the project, so the tokenisation difference compounds over hundreds of starts.
+- One line per entry. **What** and **why**, never **how** — the code already says how.
+- Entries that stop being true get deleted, not corrected underneath. A memo that reads as current
+  and isn't is worse than none.
+- Under ~60 lines. Past that, the reasoning moves into a session note and the conclusion stays here.
+- No code, diffs, or logs. Git has the changelog, and the last five commits are injected beside it.
 
-- **Written in English**, whatever language you work in. The memo is re-read at every session start
-  forever; English tokenises tighter and the models read it more accurately, so the same meaning
-  costs less and survives the round trip better.
-- One line per entry. Say **what** and **why**, never **how** — the code already says how, and a
-  memo that describes implementation is stale the week after it is written.
-- Delete entries that stopped being true. Never append a correction under a stale line.
-- Under ~60 lines. Past that, compress the oldest `Decisions` into one line.
-- No code, logs, diffs, or file dumps. It is a memo, not a changelog; git has the changelog, and
-  the last five commits are injected right next to it anyway.
+The session notes are where everything that does not fit goes: the approach that failed and why,
+the constraint found the hard way, the reasoning a one-line decision can only conclude. They cost
+nothing to keep because they are never loaded — only listed, so Claude knows one exists and can
+open it when an entry above is too terse to act on.
+
+That archive is what earns the rolling memo the right to be short.
 
 ---
 
