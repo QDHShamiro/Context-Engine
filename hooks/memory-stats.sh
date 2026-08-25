@@ -13,12 +13,11 @@ done
 [ -n "${PY:-}" ] || { echo "memory-stats: need python3 on PATH" >&2; exit 1; }
 
 exec "$PY" - "$@" <<'PY'
-import glob, io, json, os, sys
+import glob, io, json, os, subprocess, sys
 
 ALL  = "--all" in sys.argv
 JSON = "--json" in sys.argv
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
-CWD  = os.path.abspath(args[0]) if args else os.getcwd()
 
 CFG      = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
 PROJECTS = os.path.join(CFG, "projects")
@@ -26,6 +25,28 @@ PROJECTS = os.path.join(CFG, "projects")
 
 def norm(p):
     return os.path.normcase(os.path.abspath(p)).replace("\\", "/").rstrip("/")
+
+
+def git_root(p):
+    """Same definition of "project" the hooks use, so running this from a
+    subdirectory still finds the sessions recorded at the repo root."""
+    try:
+        r = subprocess.run(["git", "-C", p, "rev-parse", "--show-toplevel"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        out = r.stdout.decode("utf-8", "replace").strip()
+        if r.returncode == 0 and out:
+            return out
+    except Exception:
+        pass
+    return p
+
+
+def under(child, parent):
+    c, p = norm(child), norm(parent)
+    return c == p or c.startswith(p + "/")
+
+
+CWD = git_root(os.path.abspath(args[0]) if args else os.getcwd())
 
 
 def median(xs):
@@ -136,12 +157,21 @@ def human(n):
     return "%.1f TB" % n
 
 
+dirs = project_dirs()
+
 if ALL:
-    rows = [measure(root, files) for root, files in project_dirs()]
+    rows = [measure(root, files) for root, files in dirs]
+    FALLBACK = False
 else:
-    want = norm(CWD)
-    files = next((f for root, f in project_dirs() if norm(root) == want), [])
+    # Sessions started in a subdirectory are recorded under that path, so take
+    # everything at or below the project root, not just an exact match.
+    files = [f for root, fs in dirs if under(root, CWD) for f in fs]
     rows = [measure(CWD, files)]
+    # Nothing here yet: show the machine-wide picture rather than a dead end,
+    # so the number the user came for is on screen either way.
+    FALLBACK = not rows[0]["sessions"] and not rows[0]["memo_tokens"]
+    if FALLBACK:
+        rows = [measure(root, fs) for root, fs in dirs]
 
 every = [s for r in rows for s in r["_sizes"]]
 memos = [r["memo_tokens"] for r in rows if r["memo_tokens"]]
@@ -165,14 +195,15 @@ if JSON:
     print(json.dumps({"summary": summary, "projects": rows}, indent=2))
     sys.exit(0)
 
-shown = [r for r in rows if r["memo_tokens"] or (not ALL and r["sessions"])]
 print()
 
-if not shown and not ALL:
-    print("  No memo and no recorded sessions here yet.")
-    print("  Seed one:  mkdir -p .claude/memory && $EDITOR .claude/memory/PROJECT_CONTEXT.md")
+if FALLBACK:
+    print("  %s" % (os.path.basename(CWD.rstrip("/\\")) or CWD))
+    print("    nothing recorded here yet - showing the machine-wide picture instead")
     print()
-    sys.exit(0)
+    shown = []
+else:
+    shown = [r for r in rows if r["memo_tokens"] or (not ALL and r["sessions"])]
 
 for r in sorted(shown, key=lambda r: -r["ratio"]):
     print("  %s" % r["project"])
@@ -194,7 +225,7 @@ for r in sorted(shown, key=lambda r: -r["ratio"]):
               % (r["backup_files"], human(r["backup_bytes"])))
     print()
 
-if ALL:
+if ALL or FALLBACK:
     unseeded = len([r for r in rows if r["sessions"] and not r["memo_tokens"]])
     print("  machine-wide")
     print("    sessions             %7s          across %d projects"
@@ -211,6 +242,11 @@ if ALL:
               % "{:,}".format(summary["saved_total"]))
     if unseeded:
         print("    %d project(s) have sessions but no memo yet." % unseeded)
+    print()
+
+if FALLBACK:
+    print("  Seed a memo here and the same applies to this project:")
+    print("    mkdir -p .claude/memory && $EDITOR .claude/memory/PROJECT_CONTEXT.md")
     print()
 
 print("  Baseline is what resuming the previous session costs: the tokens that session")

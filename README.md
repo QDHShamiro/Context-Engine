@@ -186,6 +186,10 @@ memo side is estimated, at four characters per token.
 unchanged, and the memo is a summary rather than a replacement — when you need the detail back,
 that is what `.claude/memory/backups/` is for.
 
+Run it from anywhere inside a repo — it resolves to the git root, so sessions started in a
+subdirectory still count. In a project with nothing recorded yet it shows the machine-wide picture
+rather than an empty result, so the figure is on screen either way.
+
 Without the slash command:
 
 ```bash
