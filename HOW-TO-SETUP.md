@@ -44,6 +44,17 @@ Common fields, present and reliable on all three payload-bearing events: `sessio
 {"session_id":"5d204d76-...","transcript_path":"C:\\Users\\you\\.claude\\projects\\C--…\\5d204d76-….jsonl","cwd":"C:\\Users\\you\\project","hook_event_name":"SessionStart","source":"startup"}
 ```
 
+### The session title
+
+Claude Code writes the session's title into the transcript as repeated records:
+
+```json
+{"type":"ai-title","aiTitle":"Loschen project komplett","sessionId":"332e8c72-..."}
+```
+
+They are appended, not replaced, so **the last one wins**. There is no central index to read it
+from - the transcript is the source. Read it from the tail like everything else.
+
 ### Output semantics
 
 | Event | stdout | exit 2 |
@@ -101,7 +112,23 @@ Interfaces before implementations; verify each layer before building on it.
    picks it up.
 6. **Verify** (section 6) before committing.
 
+### Two memory files, not one
+
+`PROJECT_CONTEXT.md` is injected in full at every session start, so it must stay short.
+`sessions/Session_Context_<title>_<id>.md` is only ever *listed* - name and title line - so it can
+hold the detail. That asymmetry is the design: the archive is what earns the rolling memo the right
+to be brief. Never inject the archive itself; the moment you do, the saving is gone.
+
+Name the note from the session's title and keep the short session id in the filename, so it stays
+findable across renames. Reconcile at session start *and* session end, since a title usually only
+settles partway through.
+
 ### Measuring the saving
+
+Count what happened. A total over every session ever recorded includes the ones that predate the
+install and never saw a memo - that is a hypothesis presented as a measurement, and it is the
+number a reader will quote. Log each real injection and sum over the log; a fresh install should
+report zero and count up.
 
 Do not estimate the baseline, and do not put a number in the README you cannot regenerate.
 
@@ -133,7 +160,9 @@ needs, plus these helpers:
 | `CE_INPUT` | the raw stdin, kept for `ce_debug` |
 | `ce_unix <path>` | Windows path → POSIX path |
 | `ce_root` | project root: git toplevel of `CE_cwd`, else `CE_cwd`, else `$PWD` |
+| `CE_title`, `CE_title_slug` | the session's current title and a filename-safe slug of it, read from the transcript in the same call |
 | `ce_memdir <root>` | `<root>/.claude/memory`, created on demand |
+| `ce_session_file <memdir>` | this session's note filename, renaming an existing one when the title changed |
 | `ce_debug <root>` | append `CE_INPUT` to `hook-input.log`, only while `.debug` exists |
 
 **Parse the whole payload in one interpreter call.** Not one call per field. This is not a
@@ -213,6 +242,13 @@ human run `/compact` once.
 scripts. Git Bash carries a trailing `\r` into variable values, which corrupts paths and
 comparisons in ways that look like logic bugs.
 
+**A degraded read must not overwrite good data.** The rename reconciler first reverted notes to
+`untitled` whenever the transcript could not be read - turning "I don't know the title" into "the
+title is nothing". When a lookup fails, leave what is already there alone.
+
+**Keep terminal output under ~58 columns.** The first report ran wide and lost its right-hand
+column in a normal terminal, which is exactly where the units and percentages were.
+
 **A `Stop` hook that blocks needs its own loop guard.** Do not rely on a payload flag. Persist a
 marker (here: a `nagged` line appended to `.session`) and check it first. Gate blocking on real
 evidence of work — dirty tree or moved `HEAD` — or it fires after every read-only question.
@@ -276,14 +312,20 @@ claude -p --model sonnet "Do not use tools. If a project memory block is in your
 **8. Real payload capture.** `touch .claude/memory/.debug`, run a session, read `hook-input.log`,
 confirm the field names match what the parser expects.
 
-**9. Fresh clone.** Line endings and syntax:
+**9. Renames, all three ways.** Retitled session renames the note; an unreadable transcript leaves
+the existing name alone; a session with no note yet creates nothing.
+
+**10. Savings on an empty log.** With no recorded injections the report must say zero, not fall
+back to a figure derived from sessions that never used the memo.
+
+**11. Fresh clone.** Line endings and syntax:
 
 ```bash
 git clone -q <url> /tmp/verify && cd /tmp/verify
 for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; bash -n "$f" || echo "$f SYNTAX"; done
 ```
 
-**10. Re-run `install.sh`.** Entry count must not grow; the `CLAUDE.md` block must not duplicate.
+**12. Re-run `install.sh`.** Entry count must not grow; the `CLAUDE.md` block must not duplicate.
 
 ---
 
@@ -299,6 +341,8 @@ for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; ba
 | Claude never stops | Blocking `Stop` hook with no loop guard | Persist a fired-marker and check it first |
 | Existing hooks vanished | `settings.json` overwritten instead of merged | Restore from `.bak`; filter by marker and append |
 | Scripts fail after clone | CRLF | `*.sh text eol=lf` in `.gitattributes` |
+| Note reverts to `untitled` | A failed title read treated as an empty title | Leave the existing name when the lookup fails |
+| Report loses its right column | Output wider than the terminal | Keep it under ~58 columns |
 | Hook times out | Process startup under load | Raise that entry's `timeout` |
 
 ---
@@ -317,3 +361,6 @@ for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; ba
    observed, say so.
 10. Every performance number is measured from data on disk and reproducible by a command the
     README names. State what was compared and what the claim excludes.
+11. Count what happened, never what would have. Zero is an honest first reading.
+12. Only the rolling memo is injected. The session archive is listed, never loaded.
+13. A failed read leaves existing data alone. Never let "unknown" overwrite "known".

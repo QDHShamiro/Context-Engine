@@ -12,10 +12,10 @@
 </p>
 
 <p align="center">
-  <strong>99.6% of the cold start, gone &middot; 145,261 &rarr; 590 tokens</strong><br>
-  <sub>Median session-end context across 127 real sessions in 22 projects, read from the
-  transcripts' own <code>usage</code> records — only the memo side is an estimate.
-  Run <code>/memory-stats --all</code> to reproduce it on your own machine.</sub>
+  <strong>Pick a project back up for ~800 tokens, not ~150,000</strong><br>
+  <sub>A resume reloads whatever that session was holding when it ended — read from the
+  transcripts' own <code>usage</code> records, not estimated. The memo is what you load instead.
+  <code>/memory-stats</code> counts the session starts that actually used it.</sub>
 </p>
 
 ---
@@ -191,13 +191,6 @@ also the one that writes it. `--all` adds a machine-wide summary:
 memo appends a line to `.claude/memory/.starts`, and the total is the sum over those lines. A
 figure covering every session ever recorded would be a hypothetical dressed up as a measurement,
 so a fresh install honestly reports zero and counts up from there.
-
-Without a memo, the way back into a project is `claude --resume`, which reloads everything that
-session was holding when it ended — the cold number. With a memo you load the memo instead. Same
-starting point, that much less to pay for.
-
-The cumulative line is the one hypothetical and is labelled as one; the lines above it are direct
-measurements.
 
 **What is being compared.** Without a memo, the way to get state back is `claude --resume`, which
 costs whatever that session was holding when it ended. That figure is not estimated — every
@@ -532,5 +525,7 @@ LICENSE                      MIT
 | `SessionEnd` logging | Verified end-to-end; real payload captured, row written with the correct `reason`. |
 | `Stop` memo check | All eight decision branches verified. Confirmed it does not displace an existing `Stop` hook. |
 | Backup retention | Verified: 8 stale + 1 new → newest 5 kept; `CE_KEEP_BACKUPS=2` honoured. |
+| Session-note naming | Verified across all three cases: retitled session renames the note, unreadable transcript leaves the name alone, a session with no note yet creates nothing. |
+| Savings counting | Verified against a seeded `.starts` file and against an empty one, which reports zero rather than a hypothetical. |
 | `PreCompact` backup | Verified through the exact registered command line with realistic Windows-escaped payloads, both field spellings, and malformed input. **A real interactive `/compact` has not been observed** — headless `-p` mode does not compact, so that last link is untested. Run `/compact` once and check `.claude/memory/backups/`. |
 | Fresh clone | LF endings intact, `bash -n` clean on all scripts. |
