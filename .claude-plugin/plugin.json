@@ -1,0 +1,21 @@
+{
+  "name": "context-engine",
+  "version": "1.0.0",
+  "description": "Carries project state between sessions. A short memo is injected at every session start instead of replaying the transcript - about 800 tokens where a resume costs 150,000.",
+  "author": {
+    "name": "QDHShamiro",
+    "url": "https://github.com/QDHShamiro"
+  },
+  "homepage": "https://github.com/QDHShamiro/Context-Engine#readme",
+  "repository": "https://github.com/QDHShamiro/Context-Engine",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "memory",
+    "tokens",
+    "hooks",
+    "session",
+    "compaction",
+    "productivity"
+  ]
+}

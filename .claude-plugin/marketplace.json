@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "context-engine",
+  "description": "Project memory for Claude Code: a short memo injected at every session start, instead of replaying the whole transcript.",
+  "owner": {
+    "name": "QDHShamiro",
+    "url": "https://github.com/QDHShamiro"
+  },
+  "plugins": [
+    {
+      "name": "context-engine",
+      "description": "Pick a project back up for ~800 tokens instead of ~150,000. Four hooks keep a rolling memo per project, back up transcripts before compaction, and hold the memo to its rules.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

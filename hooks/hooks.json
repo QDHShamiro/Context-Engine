@@ -1,0 +1,58 @@
+{
+  "description": "Context Engine: inject the project memo at session start, keep the transcript before compaction, log sessions, and hold the memo to its rules.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start-context.sh\"",
+            "timeout": 15,
+            "statusMessage": "Loading project memory..."
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact-backup.sh\"",
+            "timeout": 30,
+            "statusMessage": "Backing up the transcript..."
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-log.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-memo-check.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

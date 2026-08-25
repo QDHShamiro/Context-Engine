@@ -65,17 +65,30 @@ memo it buys stays short.
 
 ## Install
 
+```
+/plugin marketplace add QDHShamiro/Context-Engine
+/plugin install context-engine@context-engine
+```
+
+Restart Claude Code. **That is the whole setup** — it applies to every project on the machine, with
+nothing to install per repo.
+
+<details>
+<summary><b>Without the plugin system</b></summary>
+
 ```bash
 git clone https://github.com/QDHShamiro/Context-Engine.git
 cd Context-Engine
 bash install.sh
 ```
 
-Restart Claude Code. **That is the whole setup** — the hooks register at user level, so they apply
-to every project on the machine, with nothing to install per repo.
+Registers the same four hooks directly in `~/.claude/settings.json` and appends the memo rules to
+`~/.claude/CLAUDE.md` instead of shipping them as a skill.
 
-<details>
-<summary><b>What <code>install.sh</code> actually does</b></summary>
+**Use one or the other, not both** — they register the same hooks and you would get each of them
+twice. `install.sh` refuses to run when it sees the plugin enabled.
+
+What it does:
 
 1. Copies `hooks/*.sh` to `~/.claude/hooks/context-memory/`.
 2. Works out the command line to register. On Windows the hook runs through `cmd.exe`, which cannot
@@ -87,10 +100,13 @@ to every project on the machine, with nothing to install per repo.
 6. Adds `.claude/memory/` to git's global excludes.
 
 Re-running replaces only its own entries. `CLAUDE_CONFIG_DIR` is honoured throughout.
+</details>
 
 **Requirements:** Claude Code v2.1.191+, Python 3, Git. On Windows, the Git Bash that ships with
-Git for Windows — the installer wires the hooks to it by absolute path.
-</details>
+Git for Windows.
+
+**Ships with:** four hooks, the `/memory-stats` command, and the `project-memory` skill that holds
+the rules for writing the memo.
 
 ---
 
@@ -258,10 +274,15 @@ Per project, in `<project>/.claude/memory/`:
 | `.starts` | One line per real injection. Backs the savings figure. |
 | `.session` | Session stamp (id + HEAD) for the `Stop` check. |
 
-At user level: `~/.claude/hooks/context-memory/`, four entries in `settings.json`, the
-`/memory-stats` command, a block in `CLAUDE.md`, and one line in the global gitignore.
+**Uninstall (plugin):**
 
-**Uninstall:**
+```
+/plugin uninstall context-engine@context-engine
+```
+
+**Uninstall (`install.sh`):** it also touches `~/.claude/hooks/context-memory/`, four entries in
+`settings.json`, the `/memory-stats` command, a block in `CLAUDE.md`, and one line in the global
+gitignore.
 
 ```bash
 rm -rf ~/.claude/hooks/context-memory ~/.claude/commands/memory-stats.md
@@ -269,6 +290,9 @@ rm -rf ~/.claude/hooks/context-memory ~/.claude/commands/memory-stats.md
 
 Then drop the four hook groups containing `context-memory` from `~/.claude/settings.json`, and the
 `<!-- BEGIN context-memory -->` block from `~/.claude/CLAUDE.md`.
+
+Either way, `.claude/memory/` in each project is inert once the hooks are gone — delete it or keep
+it.
 </details>
 
 ---

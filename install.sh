@@ -7,6 +7,14 @@ REPO=$(cd "$(dirname "$0")" && pwd)
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 DEST="$CLAUDE_DIR/hooks/context-memory"
 
+# This installs the same four hooks the plugin registers. Running both doubles
+# every one of them, which is silent and confusing rather than loud.
+if [ "${1:-}" != --force ] && grep -q '"context-engine@' "$CLAUDE_DIR/settings.json" 2>/dev/null; then
+  echo "install: the context-engine plugin is already enabled and registers these same hooks." >&2
+  echo "         Use one or the other. Pass --force to install anyway." >&2
+  exit 1
+fi
+
 # Probe, don't just look up: on Windows `python3` is usually the Microsoft Store
 # app-execution stub, which resolves on PATH but refuses to run anything.
 PY=""

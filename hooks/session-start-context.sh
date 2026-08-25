@@ -65,7 +65,11 @@ if [ -n "$ARCHIVE" ]; then
   echo "Read one from .claude/memory/sessions/ when you need the detail behind an entry above."
 fi
 
+# The standing instruction rides along here rather than in CLAUDE.md: a plugin
+# cannot write to the user's CLAUDE.md, and the skill only loads once triggered.
+# Two lines is the price of the memo being maintained at all.
 echo
-echo "_Injected by Context Engine. Rolling state goes in .claude/memory/PROJECT_CONTEXT.md;"
-echo "this session's notes go in .claude/memory/sessions/$SFILE._"
+echo "_Context Engine. Keep .claude/memory/PROJECT_CONTEXT.md current as you work — one line per"
+echo "finished feature, fix or decision: what and why. Detail belongs in this session's own note,"
+echo ".claude/memory/sessions/$SFILE. Load the \`project-memory\` skill before writing either._"
 exit 0

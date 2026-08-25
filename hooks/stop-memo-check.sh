@@ -26,5 +26,5 @@ HEAD_THEN=$(sed -n 2p "$STAMP" 2>/dev/null || true)
 [ -n "$DIRTY" ] || [ "$HEAD_NOW" != "$HEAD_THEN" ] || exit 0
 
 printf 'nagged\n' >> "$STAMP"
-echo "This session changed the repository but $CTX was not updated. Update it now (one line per entry: what and why, plus anything still open), then finish." >&2
+echo "This session changed the repository but $CTX was not updated. Follow the \`project-memory\` skill and update it now (one line per entry: what and why, plus anything still open), then finish." >&2
 exit 2

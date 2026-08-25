@@ -110,7 +110,7 @@ Interfaces before implementations; verify each layer before building on it.
 5. **`hooks/memory-stats.sh`** and the `/memory-stats` command file the installer writes to
    `~/.claude/commands/`. Not a hook; it lives in `hooks/` only so the installer's `cp hooks/*.sh`
    picks it up.
-6. **Verify** (section 6) before committing.
+6. **Verify** (section 7) before committing.
 
 ### Two memory files, not one
 
@@ -189,7 +189,46 @@ stderr.
 
 ---
 
-## 4. Registration
+## 4. Shipping it as a plugin
+
+A plugin is the primary distribution; `install.sh` is the fallback for anyone not using the plugin
+system. Layout Claude Code discovers on its own - none of it is referenced from `plugin.json`:
+
+```
+.claude-plugin/plugin.json       name, version, description, author, license, keywords
+.claude-plugin/marketplace.json  owner + one entry with source "./"
+hooks/hooks.json                 the four hook registrations
+commands/*.md                    slash commands
+skills/<name>/SKILL.md           skills, loaded on description match
+```
+
+Two things differ from a settings.json install:
+
+**Paths go through `${CLAUDE_PLUGIN_ROOT}`**, and each hook entry sets `"shell": "bash"`. That
+removes the whole Windows `bash.exe` problem - no absolute interpreter path to discover, no
+`cmd.exe` quoting.
+
+**A plugin cannot write to the user's `CLAUDE.md`.** Standing instructions have to arrive some
+other way, and there are only two: a skill, which loads on description match, and the `SessionStart`
+output, which is unconditional. Split them - the two-line rule that must always be in force rides
+in the injection, and the full ruleset lives in the skill for when the memo is actually being
+written. Do not put the whole ruleset in the injection; it is paid for at every session start.
+
+Validate before publishing - it catches manifest and component errors without an install:
+
+```bash
+claude plugin validate .                          # marketplace manifest
+claude plugin validate .claude-plugin/plugin.json # plugin manifest
+claude plugin validate skills                     # skills
+claude plugin validate commands                   # commands
+```
+
+Both install paths register the same hooks, so make the standalone installer refuse to run when it
+sees the plugin enabled. Doubling every hook is silent, and silent is the worst failure mode here.
+
+---
+
+## 5. Registration
 
 Write the command line so it works from `cmd.exe`:
 
@@ -209,7 +248,7 @@ marker (`context-memory`) across all entries is what makes re-running the instal
 
 ---
 
-## 5. Mistakes already made — do not repeat
+## 6. Mistakes already made — do not repeat
 
 Each of these cost a debugging cycle here.
 
@@ -258,7 +297,7 @@ Derive the project root from `$PWD` via `git rev-parse --show-toplevel`.
 
 ---
 
-## 6. Verification protocol
+## 7. Verification protocol
 
 Do not report done before all of these pass. `mkjson` builds valid fixtures:
 
@@ -329,7 +368,7 @@ for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; ba
 
 ---
 
-## 7. Failure modes
+## 8. Failure modes
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -347,7 +386,7 @@ for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; ba
 
 ---
 
-## 8. Hard rules
+## 9. Hard rules
 
 1. `PreCompact` ends with `exit 0`. Always. Exit 2 costs the user their session.
 2. One interpreter spawn per hook. Parse the whole payload once.
@@ -364,3 +403,6 @@ for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; ba
 11. Count what happened, never what would have. Zero is an honest first reading.
 12. Only the rolling memo is injected. The session archive is listed, never loaded.
 13. A failed read leaves existing data alone. Never let "unknown" overwrite "known".
+14. Run `claude plugin validate` on every manifest and component directory before publishing.
+15. Two install paths must never both register. The standalone installer refuses when the plugin
+    is enabled.
