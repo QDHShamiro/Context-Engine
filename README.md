@@ -3,9 +3,27 @@
 Four Claude Code hooks that carry project state between sessions, for every project on the
 machine.
 
-Claude Code already stores full JSONL transcripts under `~/.claude/projects/` and can `/resume`
-them, but those are raw and expensive to re-read. This keeps one short Markdown memo per project
-and injects it at session start instead — same continuity, a fraction of the tokens.
+Claude Code already stores full JSONL transcripts under `~/.claude/projects/` and can replay them
+with `claude --resume`. That solves *one* session continuing. It does not solve the ordinary case:
+you open a repo you last touched three weeks ago and Claude knows nothing about it, so you spend
+the first ten minutes re-explaining, or it spends them re-reading files. Replaying the raw
+transcript is worse — it is the whole conversation, tool output included, at full token cost.
+
+This keeps one short Markdown memo per project and injects it at session start instead. Same
+continuity, a fraction of the tokens, and it maintains itself.
+
+---
+
+## Requirements
+
+| | |
+|---|---|
+| Claude Code | v2.1.191+ (comma matchers); developed against v2.1.245 |
+| Python 3 | any; used only to parse the hook payload |
+| Git | used for the commit log, the project root, and the change check |
+| Shell | Bash. On Windows the Git Bash that ships with Git for Windows is used, and the installer wires the hooks to it by absolute path |
+
+---
 
 ## Install
 
@@ -15,60 +33,144 @@ cd Context-Engine
 bash install.sh
 ```
 
-Then restart Claude Code. That is the whole setup — the hooks are registered at user level, so
-they apply to **every project**, with nothing to install per repo.
+Then **restart Claude Code**. Hooks are read at session start; a running session will not pick
+them up.
 
-`install.sh` copies the scripts to `~/.claude/hooks/context-memory/`, merges its four entries
-into `~/.claude/settings.json` (existing hooks are left alone, a `.bak` is written), appends the
-memo-maintenance instruction to `~/.claude/CLAUDE.md`, and adds `.claude/memory/` to git's global
-excludes. Re-running replaces only its own entries. Honours `CLAUDE_CONFIG_DIR`.
+That is the entire setup. The hooks are registered at user level, so they apply to **every
+project**, with nothing to install per repo.
 
-Requires Python 3 and Git.
+### What `install.sh` actually does
+
+1. Copies `hooks/*.sh` to `~/.claude/hooks/context-memory/` and marks them executable.
+2. Works out the command line to register. On Windows the hook is executed by `cmd.exe`, which
+   cannot run a `.sh` file, so the command is `"<abs path to bash.exe>" "<abs path to script>"`
+   with forward slashes. Elsewhere it is just the script path.
+3. Backs up `~/.claude/settings.json` to `settings.json.bak`, then **merges** its four entries in.
+   Any hook group whose command does not contain `context-memory` is left exactly as it was, so
+   existing hooks survive. Re-running replaces only its own entries.
+4. Appends the memo-maintenance block from `claude-md-block.md` to `~/.claude/CLAUDE.md`, between
+   `<!-- BEGIN context-memory -->` and `<!-- END context-memory -->` markers. Re-running replaces
+   the block instead of duplicating it.
+5. Adds `.claude/memory/` to git's global excludes. If `core.excludesFile` is unset it is pointed
+   at `~/.gitignore_global`; if it is already set, the line is appended to whatever file it names.
+
+`CLAUDE_CONFIG_DIR` is honoured throughout, so you can install into an alternate config root.
+
+---
 
 ## What runs, and when
 
-| Hook | Event | Effect |
-|---|---|---|
-| `session-start-context.sh` | `SessionStart` — `startup\|resume\|compact` | Prints `PROJECT_CONTEXT.md` and the last 5 commits to stdout. `SessionStart` stdout is added to Claude's context, so this is what Claude sees before your first message. Also stamps `.session` for the Stop check. |
-| `pre-compact-backup.sh` | `PreCompact` — `manual\|auto` | Copies the full transcript to `backups/<timestamp>-<trigger>.jsonl` before compaction throws it away. Keeps the newest 5. |
-| `session-end-log.sh` | `SessionEnd` — all | Appends one row (time, project, session id, reason) to `SESSION_LOG.md`. |
-| `stop-memo-check.sh` | `Stop` | Once per session: if the repo changed but the memo did not, blocks and asks Claude to update it. |
+| Hook | Event | Matcher | Timeout |
+|---|---|---|---|
+| `session-start-context.sh` | `SessionStart` | `startup\|resume\|compact` | 15s |
+| `pre-compact-backup.sh` | `PreCompact` | `manual\|auto` | 30s |
+| `session-end-log.sh` | `SessionEnd` | `*` | 10s |
+| `stop-memo-check.sh` | `Stop` | none — `Stop` takes no matcher | 10s |
 
-Everything lives in `<project>/.claude/memory/`:
+### `SessionStart` → inject the memo
+
+Prints `PROJECT_CONTEXT.md` followed by the last five commits. `SessionStart` is one of the few
+events whose plain stdout is added to Claude's context, so this is what Claude sees before your
+first message.
+
+If neither the memo nor a git log exists it prints **nothing** and exits 0, so a scratch directory
+costs zero tokens.
+
+It also writes `.claude/memory/.session` — two lines, the session id and the current `HEAD` — which
+is what the `Stop` check compares against later. On `source=compact` the stamp is deliberately left
+alone: compaction restarts the session but not the work.
+
+Output looks like:
 
 ```
-PROJECT_CONTEXT.md   the memo — the only file you'd ever edit by hand
-SESSION_LOG.md       one row per session
-backups/             pre-compaction transcripts, newest 5
-.session             session stamp (id + HEAD), written at session start
+# myproject — Context
+Updated: 2026-08-25
+
+## State
+- Auth rewrite landed; sessions are JWT now.
+
+## Open
+- Refresh-token rotation still unimplemented.
+
+## Recent commits
+a1b2c3d 2026-08-24 feat: JWT sessions
+...
+
+_(Injected by the SessionStart memory hook. Keep .claude/memory/PROJECT_CONTEXT.md current as you work.)_
 ```
 
-## Using it well
+### `PreCompact` → keep the transcript
 
-**Let Claude write the memo.** The block `install.sh` adds to `~/.claude/CLAUDE.md` tells it to
-update `PROJECT_CONTEXT.md` after each finished feature, fix, or decision. You should not have to
-ask. If it drifts in a long session, "update the project memory" is enough — and the `Stop` hook
-catches the case where a session changed the repo and recorded nothing.
+Copies the full transcript to `.claude/memory/backups/<timestamp>-<trigger>.jsonl` before
+compaction discards it, then deletes all but the newest five.
 
-**Keep it short.** This file is injected into context at every single session start, so every
-line you add is a line you pay for forever. Under ~60 lines. One line per entry. Say *what* and
-*why*; never *how* — the code already says how, and the memo goes stale the moment it tries to
-describe implementation.
+This hook **always exits 0**. Exit 2 on `PreCompact` blocks compaction, which would cost you the
+session — so every operation is guarded and failure is silent by design.
 
-**What belongs in it:** decisions and their reasons, what currently works, what is deliberately
-deferred, and the blocker you'd otherwise have to rediscover. **What does not:** code, diffs,
-logs, file listings, or a changelog. Git already has the changelog, and the last five commits are
-injected next to the memo anyway.
+### `SessionEnd` → log the session
 
-**Delete, don't append.** When an entry stops being true, remove it. A memo that accumulates
-corrections under stale lines is worse than no memo, because it reads as current.
+Appends one row to `SESSION_LOG.md`:
 
-**Seed existing projects by hand.** A repo you have worked in for months starts with an empty
-memo — the first session there only gets the commit log. Write four lines yourself and let Claude
-maintain it from there:
+```
+| ended            | project   | session                              | reason |
+|------------------|-----------|--------------------------------------|--------|
+| 2026-08-25 19:47 | myproject | 5d204d76-3f5a-43f8-ad90-79e7f61684ae | clear  |
+```
 
-```bash
-mkdir -p .claude/memory && cat > .claude/memory/PROJECT_CONTEXT.md <<'EOF'
+`reason` is one of `clear`, `resume`, `logout`, `prompt_input_exit`, `other`. The session id is
+what `claude --resume <id>` takes.
+
+### `Stop` → enforce the memo
+
+Runs at the end of every assistant turn. Blocks **once per session** — exit 2, which feeds the
+message back to Claude and makes it continue — when the repo moved but the memo did not.
+
+It stays quiet unless all of these hold:
+
+- the cwd is inside a git repo, and `.session` exists (so a session actually started here)
+- `.claude/memory/.no-nag` does not exist
+- it has not already blocked this session (a third line `nagged` is appended to `.session`)
+- `PROJECT_CONTEXT.md` is not newer than `.session` — i.e. it was not touched this session
+- the working tree is dirty **or** `HEAD` moved since session start
+
+That last condition is what keeps it from nagging after a read-only question. Because it fires on
+every turn, this hook reads no stdin and spawns no Python — it is two git calls and a `sed`.
+
+---
+
+## Files
+
+Per project, all inside `<project>/.claude/memory/`:
+
+| | |
+|---|---|
+| `PROJECT_CONTEXT.md` | The memo. The only file you would ever edit by hand. |
+| `SESSION_LOG.md` | One row per session. |
+| `backups/` | Pre-compaction transcripts, newest 5. |
+| `.session` | Session stamp: id, HEAD, and `nagged` once the Stop check has fired. |
+| `.no-nag` | Optional. Disables the Stop check in this project. |
+| `.debug` | Optional. Makes every hook append its raw payload to `hook-input.log`. |
+| `hook-input.log` | Only written while `.debug` exists. |
+
+The whole directory is local working state and is added to git's global excludes by the installer.
+
+At user level:
+
+| | |
+|---|---|
+| `~/.claude/hooks/context-memory/*.sh` | The five scripts. |
+| `~/.claude/settings.json` | Four hook entries. |
+| `~/.claude/CLAUDE.md` | The memo-maintenance block. |
+| `~/.gitignore_global` | `.claude/memory/` — unless `core.excludesFile` already pointed elsewhere. |
+
+---
+
+## The memo
+
+`PROJECT_CONTEXT.md` is maintained by Claude, not by you. The block appended to `~/.claude/CLAUDE.md`
+tells it to update the file after each finished feature, fix, or architecture decision. Shape:
+
+```markdown
 # myproject — Context
 Updated: 2026-08-25
 
@@ -83,54 +185,240 @@ One or two lines.
 
 ## Open
 - <next thing, blocker, or deferred item>
+```
+
+The rules that ship in `CLAUDE.md`:
+
+- One line per entry. Say **what** and **why**, never **how** — the code already says how, and a
+  memo that describes implementation is stale the week after it is written.
+- Delete entries that stopped being true. Never append a correction under a stale line.
+- Under ~60 lines. Past that, compress the oldest `Decisions` into one line.
+- No code, logs, diffs, or file dumps. It is a memo, not a changelog; git has the changelog, and
+  the last five commits are injected right next to it anyway.
+
+---
+
+## Using it well
+
+**Let Claude write it.** You should not have to ask. If it drifts in a long session, "update the
+project memory" is enough, and the `Stop` check catches the session that changed the repo and
+recorded nothing.
+
+**Keep it short — this is the whole trade.** The memo is injected at *every* session start, so
+every line you add is a line you pay for in every future session in that repo. A 200-line memo is
+worse than no memo: you have reinvented the transcript, at transcript prices, with none of the
+detail.
+
+**Write it when the work lands, not at the end.** A memo assembled from memory in the last two
+minutes of a session is the one that gets the reasons wrong, and the reasons are the only part
+worth keeping.
+
+**Seed existing repos by hand.** A project you have worked in for months starts with an empty
+memo — the first session there gets only the commit log. Write four lines and let Claude take over:
+
+```bash
+mkdir -p .claude/memory && cat > .claude/memory/PROJECT_CONTEXT.md <<'EOF'
+# myproject — Context
+Updated: 2026-08-25
+
+## What this is
+One or two lines.
+
+## State
+- <what works now>
+
+## Open
+- <next thing or blocker>
 EOF
 ```
 
-**`SESSION_LOG.md` is for finding the session you want back.** It maps timestamps to session ids;
-`claude --resume <id>` takes it from there.
+**`SESSION_LOG.md` is how you find the session you want back.** It maps a timestamp to a session
+id; `claude --resume <id>` does the rest. Useful when you remember *when* something happened but
+not which session it was.
 
-**`backups/` is for recovering detail compaction dropped.** After a `/compact`, the exact commands
-and outputs are gone from context but still in the newest backup file. Grep it.
+**`backups/` is how you recover what compaction dropped.** After a `/compact` the exact commands,
+paths, and outputs are gone from context but still sitting in the newest backup file. It is JSONL —
+grep it.
+
+**Don't commit `.claude/memory/`.** The installer handles this globally. If a repo already tracked
+it, `git rm -r --cached .claude/memory` once.
+
+---
 
 ## Configuration
 
-There is no config file. Three switches, all inside a project's `.claude/memory/`:
+No config file. Three switches:
 
 | | |
 |---|---|
 | `touch .claude/memory/.no-nag` | Stop the memo check from blocking in this project. |
-| `touch .claude/memory/.debug` | Append every raw hook payload to `hook-input.log`. Delete the file to stop. |
-| `CE_KEEP_BACKUPS=20` | Number of pre-compaction backups to keep. Default 5. Set in the hook's environment. |
+| `touch .claude/memory/.debug` | Append every raw hook payload to `hook-input.log`. Delete to stop. |
+| `CE_KEEP_BACKUPS` | Number of pre-compaction backups to keep. Default 5. |
 
-To remove everything: delete the four `context-memory` entries from `~/.claude/settings.json`,
-delete `~/.claude/hooks/context-memory/`, and remove the `<!-- BEGIN context-memory -->` block
-from `~/.claude/CLAUDE.md`.
+`CE_KEEP_BACKUPS` is read from the hook's environment, so set it in `~/.claude/settings.json`:
+
+```json
+{
+  "env": {
+    "CE_KEEP_BACKUPS": "20"
+  }
+}
+```
+
+### The entries the installer writes
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|compact",
+        "hooks": [{ "type": "command", "command": "\"C:/Program Files/Git/usr/bin/bash.exe\" \"C:/Users/you/.claude/hooks/context-memory/session-start-context.sh\"", "timeout": 15 }]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [{ "type": "command", "command": "... pre-compact-backup.sh", "timeout": 30 }]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "... session-end-log.sh", "timeout": 10 }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "... stop-memo-check.sh", "timeout": 10 }]
+      }
+    ]
+  }
+}
+```
+
+On Linux and macOS the `command` is just the script path, with no `bash.exe` prefix.
+
+`SessionStart` deliberately omits the `clear` and `fork` matchers. Add them if you want the memo
+injected after `/clear` too.
+
+---
+
+## Uninstall
+
+```bash
+rm -rf ~/.claude/hooks/context-memory
+```
+
+Then remove the four hook groups whose `command` contains `context-memory` from
+`~/.claude/settings.json`, and delete the `<!-- BEGIN context-memory -->` … `<!-- END context-memory -->`
+block from `~/.claude/CLAUDE.md`. Optionally drop `.claude/memory/` from `~/.gitignore_global`.
+
+Per-project data in `.claude/memory/` is inert once the hooks are gone; delete it or keep it.
+
+---
 
 ## Troubleshooting
 
-Hooks fail silently on purpose — `PreCompact` in particular always exits 0, because exit 2 would
-block compaction and cost you the session.
+Hooks fail silently on purpose. `PreCompact` in particular always exits 0, because exit 2 there
+blocks compaction. So work down this list rather than waiting for an error.
 
-1. `ls .claude/memory/` — if `SESSION_LOG.md` never appears, the hooks are not running at all.
-   Check that Claude Code was restarted after installing.
-2. `touch .claude/memory/.debug`, start a session, then read `hook-input.log`. If it stays empty
-   the hook is not being invoked; if it fills up, the payload is there and the script is the
-   problem.
-3. Run a hook by hand against a real payload — everything they need arrives on stdin:
-   ```bash
-   echo '{"cwd":"/path/to/repo","session_id":"x","source":"startup"}' \
-     | bash ~/.claude/hooks/context-memory/session-start-context.sh
-   ```
+**1. Are the hooks running at all?**
 
-## Implementation notes
+```bash
+ls .claude/memory/
+```
 
-- The shipping binary (v2.1.245) sends `source` / `trigger` / `reason` where the documentation
-  says `session_start_reason` / `compaction_trigger` / `session_end_reason`. Both spellings are
-  read, so this works either way.
-- Interpreters are probed by execution rather than `PATH` lookup: on Windows `python3` is usually
-  the Microsoft Store stub, which resolves happily and then refuses to run.
-- All hook fields are parsed in a single Python spawn. `SessionEnd` runs on a short budget and on
-  Windows process startup is the expensive part.
-- `stop-memo-check.sh` reads no stdin and spawns no Python — it runs at the end of every assistant
-  turn, so it is kept to a couple of git calls.
-- `*.sh` is pinned to LF in `.gitattributes`; CRLF would break the scripts on checkout.
+`SESSION_LOG.md` appears after your first completed session in that project. If it never shows up,
+Claude Code was not restarted after install, or the entries are missing from `settings.json`:
+
+```bash
+python -c "import json,io;h=json.load(io.open('$HOME/.claude/settings.json',encoding='utf-8'))['hooks'];\
+[print(e,g.get('matcher','-'),x['command'][:60]) for e,gs in h.items() for g in gs for x in g['hooks'] if 'context-memory' in x['command']]"
+```
+
+**2. Is the payload arriving?**
+
+```bash
+touch .claude/memory/.debug
+# start a session, then:
+cat .claude/memory/hook-input.log
+```
+
+Empty means the hook is not being invoked — check the command line in `settings.json`, especially
+the path to `bash.exe`. Full means the payload is fine and the script is the problem.
+
+**3. Run a hook by hand.** Everything they need arrives on stdin, so they are trivially testable:
+
+```bash
+echo '{"cwd":"/path/to/repo","session_id":"x","source":"startup"}' \
+  | bash ~/.claude/hooks/context-memory/session-start-context.sh
+
+echo '{"cwd":"/path/to/repo","transcript_path":"/tmp/t.jsonl","trigger":"manual"}' \
+  | bash ~/.claude/hooks/context-memory/pre-compact-backup.sh
+```
+
+On Windows, JSON must escape backslashes (`C:\\Users\\...`) — a hand-written `"C:\Users\..."` is
+invalid JSON and the parser will silently return empty fields. Generate fixtures with
+`python -c "import json;print(json.dumps({...}))"` rather than by hand.
+
+**4. The Stop hook keeps interrupting.** `touch .claude/memory/.no-nag`. If it fires when the repo
+is clean, check that `.session` line 2 holds the real `HEAD` — a stale stamp makes every turn look
+like HEAD moved.
+
+**5. A hook times out.** Raise `timeout` on that entry in `settings.json`. Windows process startup
+under load is the usual cause, not the script.
+
+---
+
+## Platform and implementation notes
+
+- **The docs and the binary disagree on field names.** v2.1.245 sends `source`, `trigger`, and
+  `reason`; the published schema says `session_start_reason`, `compaction_trigger`, and
+  `session_end_reason`. Both spellings are read, newest first, so this keeps working either way.
+- **`python3` on Windows is usually the Microsoft Store stub** — it resolves on `PATH` and then
+  exits 49 without running anything. Interpreters are therefore probed by execution (`py -c ""`),
+  never by `command -v` alone.
+- **One Python spawn per hook.** All fields are parsed in a single call and `eval`'d into shell
+  variables via `shlex.quote`. `SessionEnd` runs on a short shared budget and on Windows process
+  startup dominates, so four spawns made it flaky and one does not.
+- **`stop-memo-check.sh` is the exception** — no stdin, no Python. It runs after every turn, so it
+  gets everything from `$PWD` and the stamp file.
+- **Windows paths.** `transcript_path` and `cwd` arrive as `C:\Users\...`. Anything matching
+  `[A-Za-z]:*` is passed through `cygpath -u`; a bracket pattern like `[\\/]` is not used because
+  it survives escaping layers badly.
+- **`$0` normalisation.** Each script converts its own `$0` before `dirname`, because `dirname` on
+  a backslash path returns `.` and the `_lib.sh` source would fail.
+- **`*.sh` is pinned to LF** in `.gitattributes`. CRLF breaks the scripts on checkout — Git Bash
+  carries the `\r` into variable values.
+- **Idempotence.** Both the `settings.json` merge and the `CLAUDE.md` block key off the string
+  `context-memory` / the HTML markers, so `install.sh` can be re-run freely.
+
+---
+
+## Repo layout
+
+```
+hooks/
+  _lib.sh                    payload parsing, path conversion, project root, debug dump
+  session-start-context.sh   SessionStart
+  pre-compact-backup.sh      PreCompact
+  session-end-log.sh         SessionEnd
+  stop-memo-check.sh         Stop
+claude-md-block.md           the block appended to ~/.claude/CLAUDE.md
+install.sh                   copy, merge, append, gitignore
+HOW-TO-SETUP.md              build/verify runbook, written for Claude Code
+```
+
+---
+
+## Verification status
+
+| | |
+|---|---|
+| `SessionStart` injection | Verified end-to-end — a real headless session repeated a token planted in the memo and the newest commit subject. |
+| `SessionEnd` logging | Verified end-to-end; real payload captured, row written with the correct `reason`. |
+| `Stop` memo check | All eight decision branches verified. Confirmed it does not displace an existing `Stop` hook. |
+| Backup retention | Verified: 8 stale + 1 new → newest 5 kept; `CE_KEEP_BACKUPS=2` honoured. |
+| `PreCompact` backup | Verified through the exact registered command line with realistic Windows-escaped payloads, both field spellings, and malformed input. **A real interactive `/compact` has not been observed** — headless `-p` mode does not compact, so that last link is untested. Run `/compact` once and check `.claude/memory/backups/`. |
+| Fresh clone | LF endings intact, `bash -n` clean on all scripts. |

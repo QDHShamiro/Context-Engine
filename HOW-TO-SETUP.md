@@ -1,0 +1,293 @@
+# HOW-TO-SETUP
+
+A runbook for Claude Code — installing, verifying, extending, or rebuilding this hook set without
+rediscovering the traps. Read it before touching `hooks/` or `install.sh`.
+
+`README.md` explains what the system does for a human. This file is about getting it *right*.
+
+---
+
+## 1. Ground truth — do not guess these
+
+The published hook documentation and the shipping binary disagree in places, and the differences
+are silent failures, not errors. Everything below was verified against **Claude Code v2.1.245** by
+capturing real payloads.
+
+### Matchers
+
+| Event | Valid matcher values | Notes |
+|---|---|---|
+| `SessionStart` | `startup` `resume` `clear` `compact` `fork` | |
+| `PreCompact` | `manual` `auto` | |
+| `SessionEnd` | `clear` `resume` `logout` `prompt_input_exit` `other` | |
+| `Stop` | **none** — takes no matcher, always fires | Omit the `matcher` key entirely |
+
+Matcher syntax: `*`, `""`, or omitted matches all. A value containing only letters, digits, `_`,
+`-`, spaces, `,` and `|` is an exact-match list separated by `|` or `,`. Anything else is treated
+as an unanchored JavaScript regex. Comma separators need v2.1.191+; `|` works everywhere, so
+prefer it.
+
+### Payload field names
+
+**The binary sends the short names. The docs list the long ones. Read both.**
+
+| Purpose | v2.1.245 sends | Docs say |
+|---|---|---|
+| why the session started | `source` | `session_start_reason` |
+| what triggered compaction | `trigger` | `compaction_trigger` |
+| why the session ended | `reason` | `session_end_reason` |
+
+Common fields, present and reliable on all three payload-bearing events: `session_id`,
+`transcript_path`, `cwd`, `hook_event_name`. A real captured `SessionStart` payload:
+
+```json
+{"session_id":"5d204d76-...","transcript_path":"C:\\Users\\you\\.claude\\projects\\C--…\\5d204d76-….jsonl","cwd":"C:\\Users\\you\\project","hook_event_name":"SessionStart","source":"startup"}
+```
+
+### Output semantics
+
+| Event | stdout | exit 2 |
+|---|---|---|
+| `SessionStart` | **added to Claude's context** | not honoured; stderr shown to user |
+| `PreCompact` | debug log only | **blocks compaction** |
+| `SessionEnd` | debug log only | not honoured |
+| `Stop` | debug log only | **blocks stopping**, stderr goes back to Claude as the reason |
+
+Two consequences that shape the whole design: `SessionStart` is the only place to inject context,
+and `PreCompact` must never exit non-zero.
+
+### Timeouts
+
+Default is 600s for `command` hooks, except `UserPromptSubmit` at 30s. `SessionEnd` hooks share a
+**1.5-second budget** unless a longer per-hook `timeout` raises it (up to 60s). Always set an
+explicit `timeout` on `SessionEnd`.
+
+---
+
+## 2. Preconditions
+
+Run these before building anything. Each one has bitten this project.
+
+```bash
+# Bash, and its absolute path for the Windows command line
+command -v bash && cygpath -m "$(command -v bash).exe" 2>/dev/null
+
+# A python that actually runs — NOT just one that resolves
+for c in python3 python py; do "$c" -c "print('$c ok')" 2>/dev/null; done
+
+# Git
+git --version
+
+# Claude Code version — matcher and field behaviour depend on it
+claude --version
+```
+
+If `python3` prints nothing but `command -v python3` succeeds, you have hit the Microsoft Store
+app-execution stub. It exits 49 without running. **Probe interpreters by execution, never by
+lookup.**
+
+---
+
+## 3. Build order
+
+Interfaces before implementations; verify each layer before building on it.
+
+1. **`hooks/_lib.sh`** — payload parsing and path handling. Everything else depends on it.
+2. **One hook script per event.** Each sources `_lib.sh`, does one thing, exits explicitly.
+3. **`install.sh`** — copy, merge, append, gitignore. Idempotent.
+4. **`claude-md-block.md`** — the instruction appended to `~/.claude/CLAUDE.md`.
+5. **Verify** (section 6) before committing.
+
+### `_lib.sh` contract
+
+Sourced, never executed. On return it must have set, as shell variables, every field any hook
+needs, plus these helpers:
+
+| | |
+|---|---|
+| `CE_<field>` | one per payload field, empty string when absent — pre-initialised so `set -u` is safe |
+| `CE_INPUT` | the raw stdin, kept for `ce_debug` |
+| `ce_unix <path>` | Windows path → POSIX path |
+| `ce_root` | project root: git toplevel of `CE_cwd`, else `CE_cwd`, else `$PWD` |
+| `ce_memdir <root>` | `<root>/.claude/memory`, created on demand |
+| `ce_debug <root>` | append `CE_INPUT` to `hook-input.log`, only while `.debug` exists |
+
+**Parse the whole payload in one interpreter call.** Not one call per field. This is not a
+micro-optimisation: with four separate spawns the `SessionEnd` hook missed its budget on roughly
+half of runs and wrote nothing, silently. Emit `KEY=<shlex.quote(value)>` lines and `eval` them.
+
+### Script skeleton
+
+Every hook script starts the same way:
+
+```bash
+#!/usr/bin/env bash
+set -u
+SELF=$0; case "$SELF" in [A-Za-z]:*) SELF=$(cygpath -u "$SELF" 2>/dev/null || printf %s "$SELF");; esac
+. "$(dirname "$SELF")/_lib.sh"
+
+ROOT=$(ce_root)
+ce_debug "$ROOT"
+```
+
+The `$0` conversion is required. When `cmd.exe` invokes `bash.exe "C:\...\hook.sh"`, `dirname` on
+a backslash path returns `.`, and sourcing `_lib.sh` fails — silently, because hooks swallow
+stderr.
+
+---
+
+## 4. Registration
+
+Write the command line so it works from `cmd.exe`:
+
+```
+"<abs path to bash.exe>" "<abs path to script.sh>"
+```
+
+Both quoted, both forward slashes, obtained with `cygpath -m`. Get the bash path from `$BASH`,
+appending `.exe` if `"$BASH.exe"` is executable — `cygpath -m /usr/bin/bash` yields a path with no
+extension, which `cmd.exe` will not run.
+
+On Linux and macOS register the script path alone.
+
+**Merge, never overwrite.** Load `settings.json`, keep every hook group whose serialised form does
+not contain your marker string, append yours, write back. Copy to `.bak` first. Reuse of a single
+marker (`context-memory`) across all entries is what makes re-running the installer safe.
+
+---
+
+## 5. Mistakes already made — do not repeat
+
+Each of these cost a debugging cycle here.
+
+**A bracket pattern with a backslash does not survive tool escaping.** `[\\/]` written through a
+JSON tool parameter arrives as `[\/]`, which in a `case` glob matches only `/`. Windows paths then
+never match and `cygpath` never runs. Detect a Windows path with `[A-Za-z]:*` instead — no
+backslash, no escaping layer, and `cygpath` normalises either separator anyway.
+
+**Hand-written JSON test fixtures are usually invalid.** `printf '{"p":"C:\\tmp\\x"}'` yields
+`"C:\tmp\x"` — `\t` is a tab escape and `\x` is illegal, so `json.load` throws and every field
+comes back empty. This looks exactly like a broken parser. Generate fixtures with
+`python -c "import json;print(json.dumps({...}))"`.
+
+**`python3` resolving is not `python3` working.** See section 2.
+
+**Silence is the default failure mode.** Every hook swallows stderr and most exit 0 regardless.
+Build the debug affordance (`.debug` → `hook-input.log`) *first*; it is how you find out that a
+payload field is named `source` and not `session_start_reason`.
+
+**`SessionEnd` does not reliably fire in headless `-p` mode.** Roughly half of runs, from a
+teardown race. It is not a defect in the hook. Verify `SessionEnd` by direct invocation plus one
+captured real payload, not by counting headless runs.
+
+**Headless mode does not compact.** Filling context with large reads, giant prompts, or
+`--continue` chains up to a 1.7 MB transcript produced no compaction. There is no way to force
+`PreCompact` from `-p`. Verify the script and the registered command line directly, then have a
+human run `/compact` once.
+
+**CRLF breaks the scripts.** Add `*.sh text eol=lf` to `.gitattributes` in the same commit as the
+scripts. Git Bash carries a trailing `\r` into variable values, which corrupts paths and
+comparisons in ways that look like logic bugs.
+
+**A `Stop` hook that blocks needs its own loop guard.** Do not rely on a payload flag. Persist a
+marker (here: a `nagged` line appended to `.session`) and check it first. Gate blocking on real
+evidence of work — dirty tree or moved `HEAD` — or it fires after every read-only question.
+
+**A `Stop` hook runs after every turn.** Budget accordingly: no stdin read, no interpreter spawn.
+Derive the project root from `$PWD` via `git rev-parse --show-toplevel`.
+
+---
+
+## 6. Verification protocol
+
+Do not report done before all of these pass. `mkjson` builds valid fixtures:
+
+```bash
+mkjson() { python -c "import json,sys;print(json.dumps(dict(a.split('=',1) for a in sys.argv[1:])))" "$@"; }
+R=$(cygpath -w "$PWD" 2>/dev/null || printf %s "$PWD")
+```
+
+**1. Each hook, both field spellings.** Short names and documented names must behave identically.
+
+```bash
+mkjson "cwd=$R" "session_id=t1" "source=startup"   | bash hooks/session-start-context.sh
+mkjson "cwd=$R" "session_id=t1" "session_start_reason=startup" | bash hooks/session-start-context.sh
+```
+
+**2. Malformed and empty stdin.** Must exit 0, must not hang, must not create garbage.
+
+```bash
+printf 'not json' | bash hooks/pre-compact-backup.sh; echo "exit=$?  # must be 0"
+printf ''         | bash hooks/session-start-context.sh; echo "exit=$?"
+```
+
+**3. Project root from a subdirectory.** Pass a nested `cwd` and confirm the hook still finds the
+repo root.
+
+**4. Empty project.** No git, no memo → `SessionStart` must print nothing and exit 0.
+
+**5. Through the registered command line**, not through `bash hooks/…`. This is what proves the
+`bash.exe` path, the quoting, and `$0` normalisation:
+
+```bash
+mkjson "cwd=$R" "session_id=t1" "trigger=manual" \
+  | "C:/Program Files/Git/usr/bin/bash.exe" "$HOME/.claude/hooks/context-memory/pre-compact-backup.sh"
+```
+
+**6. The merge preserved foreign hooks.** List every registered hook and confirm pre-existing ones
+survived:
+
+```bash
+python -c "import json,io;h=json.load(io.open('$HOME/.claude/settings.json',encoding='utf-8'))['hooks'];\
+[print('%-14s %-24s %s'%(e,g.get('matcher','(none)'),x['command'][:70])) for e,gs in h.items() for g in gs for x in g['hooks']]"
+```
+
+**7. Real session, real injection.** The only test that proves the whole chain. Plant a token in a
+throwaway project's memo and make a real session repeat it:
+
+```bash
+claude -p --model sonnet "Do not use tools. If a project memory block is in your context, reply with the MAGIC token in it, else NONE."
+```
+
+**8. Real payload capture.** `touch .claude/memory/.debug`, run a session, read `hook-input.log`,
+confirm the field names match what the parser expects.
+
+**9. Fresh clone.** Line endings and syntax:
+
+```bash
+git clone -q <url> /tmp/verify && cd /tmp/verify
+for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; bash -n "$f" || echo "$f SYNTAX"; done
+```
+
+**10. Re-run `install.sh`.** Entry count must not grow; the `CLAUDE.md` block must not duplicate.
+
+---
+
+## 7. Failure modes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| All fields empty | Invalid JSON fixture, or the Store `python3` stub | Generate fixtures with `json.dumps`; probe interpreters by execution |
+| Hook produces nothing, exit 0 | `_lib.sh` not found — `dirname` on a backslash `$0` | Normalise `$0` with `cygpath -u` first |
+| `SessionEnd` writes intermittently | Multiple interpreter spawns exceeding the 1.5s budget | One parse call; set an explicit `timeout` |
+| Windows path never converted | `[\\/]` collapsed to `[\/]` by escaping | Match `[A-Za-z]:*` |
+| Compaction refuses to run | A `PreCompact` hook exited non-zero | Guard everything, end with `exit 0` |
+| Claude never stops | Blocking `Stop` hook with no loop guard | Persist a fired-marker and check it first |
+| Existing hooks vanished | `settings.json` overwritten instead of merged | Restore from `.bak`; filter by marker and append |
+| Scripts fail after clone | CRLF | `*.sh text eol=lf` in `.gitattributes` |
+| Hook times out | Process startup under load | Raise that entry's `timeout` |
+
+---
+
+## 8. Hard rules
+
+1. `PreCompact` ends with `exit 0`. Always. Exit 2 costs the user their session.
+2. One interpreter spawn per hook. Parse the whole payload once.
+3. `Stop` hooks: no stdin, no interpreter, and a persisted loop guard.
+4. Read both the short and the documented field names.
+5. Probe interpreters by running them.
+6. Merge into `settings.json`; back it up first; key idempotence off a single marker string.
+7. Register hooks by absolute path, through an absolute interpreter path on Windows.
+8. Ship the debug affordance with the first version, not after the first mystery.
+9. Never claim a leg is verified because a neighbouring leg passed. If `/compact` was never
+   observed, say so.
