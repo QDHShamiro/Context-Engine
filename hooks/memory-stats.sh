@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# What the memo saves when you pick a project back up, measured from the token
-# counts Claude Code already writes into its own transcripts.
+# What Context Engine has actually saved, counted from session starts that really
+# got the memo, against token counts Claude Code writes into its own transcripts.
 #
 #   bash memory-stats.sh            this project
-#   bash memory-stats.sh --all      every project, plus a machine-wide summary
+#   bash memory-stats.sh --all      every project with a memo
 #   bash memory-stats.sh --json     machine-readable
 set -u
 
@@ -12,7 +12,7 @@ for _c in python3 python py; do
 done
 [ -n "${PY:-}" ] || { echo "memory-stats: need python3 on PATH" >&2; exit 1; }
 
-exec "$PY" - "$@" <<'PY'
+exec "$PY" - "$@" <<'ENDPY'
 import glob, io, json, os, subprocess, sys, time
 
 ALL  = "--all" in sys.argv
@@ -58,28 +58,11 @@ def num(n):
     return "{:,}".format(int(n))
 
 
-def size(n):
-    for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024:
-            return "%.0f %s" % (n, unit)
-        n /= 1024.0
-    return "%.1f TB" % n
-
-
 def day(ts):
     if not ts:
         return "-"
     d = time.strftime("%Y-%m-%d", time.localtime(ts))
     return "today" if d == TODAY else d
-
-
-def span(first, last):
-    if not first:
-        return ""
-    a, b = day(first), day(last)
-    if a == b:
-        return a if a == "today" else "on %s" % a
-    return "%s to %s" % (a, b)
 
 
 def plural(n, word):
@@ -89,7 +72,7 @@ def plural(n, word):
 CWD = git_root(os.path.abspath(args[0]) if args else os.getcwd())
 
 
-# --------------------------------------------------------------- measuring --
+# -------------------------------------------------------------- measuring ---
 
 def session_context(path):
     """Tokens the model was holding when this session ended.
@@ -153,52 +136,48 @@ def project_dirs():
 
 
 def measure(root, files):
-    sizes, stamps, disk = [], [], 0
-    for f in files:
-        try:
-            disk += os.path.getsize(f)
-            stamps.append(os.path.getmtime(f))
-        except Exception:
-            pass
-        c = session_context(f)
-        if c:
-            sizes.append(c)
+    sizes = [c for c in (session_context(f) for f in files) if c]
+    med = median(sizes)
 
-    memo_p = os.path.join(root, ".claude", "memory", "PROJECT_CONTEXT.md")
-    memo_t = memo_l = memo_m = 0
+    mem = os.path.join(root, ".claude", "memory")
+    memo_t = memo_l = 0
+    memo_p = os.path.join(mem, "PROJECT_CONTEXT.md")
     if os.path.exists(memo_p):
         text = io.open(memo_p, encoding="utf-8", errors="replace").read()
         memo_t, memo_l = max(1, len(text) // 4), len(text.splitlines())
-        memo_m = os.path.getmtime(memo_p)
 
-    bk = glob.glob(os.path.join(root, ".claude", "memory", "backups", "*.jsonl"))
-    med = median(sizes)
+    # One line per session start that actually received the memo. Counting what
+    # happened is the only honest basis for a savings figure - a total over every
+    # session ever recorded would be a hypothetical dressed up as a measurement.
+    starts = []
+    try:
+        for line in io.open(os.path.join(mem, ".starts"), encoding="utf-8", errors="replace"):
+            bits = line.split()
+            if len(bits) == 2:
+                starts.append((int(bits[0]), int(bits[1])))
+    except Exception:
+        pass
 
     return {
         "project": os.path.basename(root.rstrip("/\\")) or root,
         "root": root,
         "sessions": len(sizes),
-        "first": min(stamps) if stamps else 0,
-        "last": max(stamps) if stamps else 0,
-        "disk_bytes": disk,
-        "biggest": max(sizes) if sizes else 0,
-        "baseline_median": med,
+        "resume_cost": med,
         "memo_tokens": memo_t,
         "memo_lines": memo_l,
-        "memo_updated": memo_m,
-        "backup_files": len(bk),
-        "backup_bytes": sum(os.path.getsize(f) for f in bk),
-        "saved_tokens": max(0, med - memo_t) if memo_t and med else 0,
+        "starts": len(starts),
+        "since": min([t for t, _ in starts] or [0]),
+        "saved_real": sum(max(0, med - m) for _, m in starts),
+        "saved_per_start": max(0, med - memo_t) if memo_t and med else 0,
         "saved_percent": round((med - memo_t) * 100.0 / med, 1) if memo_t and med else 0,
         "ratio": round(med / memo_t, 1) if memo_t and med else 0,
-        "_sizes": sizes,
     }
 
 
 dirs = project_dirs()
 
-# The machine-wide figures are always computed, whichever mode we are in: the
-# overall total is the point of the report, not an extra you have to ask for.
+# The overall figures are always computed, whichever mode we are in: the total is
+# the point of the report, not something you should have to pass a flag for.
 all_rows = [measure(root, files) for root, files in dirs]
 
 if ALL:
@@ -210,135 +189,84 @@ else:
     rows = [measure(CWD, files)]
     FALLBACK = not rows[0]["sessions"] and not rows[0]["memo_tokens"]
 
-every    = [s for r in all_rows for s in r["_sizes"]]
-memos    = [r["memo_tokens"] for r in all_rows if r["memo_tokens"]]
-scored   = [r for r in all_rows if r["sessions"]]
-med_base = median(every)
-med_memo = median(memos)
-
 summary = {
-    "projects":       len(scored),
-    "projects_memo":  len(memos),
-    "sessions":       len(every),
-    "first":          min([r["first"] for r in scored] or [0]),
-    "last":           max([r["last"] for r in scored] or [0]),
-    "disk_bytes":     sum(r["disk_bytes"] for r in all_rows),
-    "biggest":        max([r["biggest"] for r in all_rows] or [0]),
-    "baseline_median": med_base,
-    "memo_median":    med_memo,
-    "saved_tokens":   max(0, med_base - med_memo) if med_memo and med_base else 0,
-    "saved_percent":  round((med_base - med_memo) * 100.0 / med_base, 1) if med_memo and med_base else 0,
-    "ratio":          round(med_base / med_memo, 1) if med_memo and med_base else 0,
-    # Every recorded session, had it started from a memo instead of a resume.
-    "saved_total":    sum(max(0, s - med_memo) for s in every) if med_memo else 0,
+    "projects":      len([r for r in all_rows if r["sessions"]]),
+    "projects_memo": len([r for r in all_rows if r["memo_tokens"]]),
+    "starts":        sum(r["starts"] for r in all_rows),
+    "since":         min([r["since"] for r in all_rows if r["since"]] or [0]),
+    "saved_real":    sum(r["saved_real"] for r in all_rows),
 }
-
-for r in all_rows + rows:
-    r.pop("_sizes", None)
 
 if JSON:
     print(json.dumps({"summary": summary, "projects": rows}, indent=2))
     sys.exit(0)
 
 
-# ---------------------------------------------------------------- printing --
+# --------------------------------------------------------------- printing ---
 
-RULE = " " * 24 + "-" * 10
+RULE = " " * 20 + "-" * 9
 
 
 def row(label, value, note=""):
-    print("    %-19s %10s   %s" % (label, value, note))
+    print("    %-15s %9s   %s" % (label, value, note))
 
 
-def comparison(cold, memo, saved, pct, ratio, cold_note, memo_note):
-    row("picking up cold", num(cold), cold_note)
-    row("picking up by memo", num(memo), memo_note)
+def block(r):
+    print("  %s" % r["project"])
+    print()
+    row("memo", num(r["memo_tokens"]), "tokens, %s" % plural(r["memo_lines"], "line"))
+    row("a resume", num(r["resume_cost"]), "tokens")
     print(RULE)
-    row("you save", num(saved), "%s%% less, %sx smaller" % (pct, ratio))
+    row("saved per start", num(r["saved_per_start"]),
+        "%s%% less, %sx" % (r["saved_percent"], r["ratio"]))
+    print()
+    if r["starts"]:
+        row("starts", num(r["starts"]), "since %s" % day(r["since"]))
+        row("saved so far", num(r["saved_real"]), "tokens")
+    else:
+        row("starts", "0", "counting from now on")
+    print()
 
 
 print()
 
 if FALLBACK:
     print("  %s" % (os.path.basename(CWD.rstrip("/\\")) or CWD))
-    print("    nothing recorded here yet - showing the machine-wide picture instead")
+    print("    no memo and no sessions here yet")
     print()
-    shown = []
+elif ALL:
+    for r in sorted([x for x in all_rows if x["ratio"]], key=lambda x: -x["saved_real"]):
+        block(r)
 else:
-    shown = [r for r in rows if r["memo_tokens"] or (not ALL and r["sessions"])]
-
-for r in sorted(shown, key=lambda r: -r["ratio"]):
-    print("  %s" % r["project"])
-    print()
-    row("sessions", r["sessions"], span(r["first"], r["last"]))
-    if r["memo_tokens"]:
-        row("memo", num(r["memo_tokens"]),
-            "tokens, %s, updated %s" % (plural(r["memo_lines"], "line"), day(r["memo_updated"])))
-    else:
-        row("memo", "-", "none written here yet")
-    if r["disk_bytes"]:
-        row("transcripts", size(r["disk_bytes"]), "on disk")
-    if r["backup_files"]:
-        row("backups", r["backup_files"], "kept here, %s" % size(r["backup_bytes"]))
-    if r["biggest"] and r["biggest"] != r["baseline_median"]:
-        row("biggest session", num(r["biggest"]), "tokens")
+    r = rows[0]
     if r["ratio"]:
+        block(r)
+    else:
+        print("  %s" % r["project"])
         print()
-        comparison(r["baseline_median"], r["memo_tokens"], r["saved_tokens"],
-                   r["saved_percent"], r["ratio"],
-                   "tokens - what resuming the last session costs",
-                   "tokens - your memo instead")
-    print()
+        row("memo", "-", "none written here yet")
+        row("sessions", num(r["sessions"]), "recorded")
+        print()
 
-# The overall block always prints: the machine-wide total is the point of the
-# report, not something you should have to pass a flag for.
 s = summary
-print("  Overall - everything on this machine")
+print("  All projects")
 print()
-row("projects", s["projects"],
-    "%d with a memo, %d without" % (s["projects_memo"], s["projects"] - s["projects_memo"]))
-row("sessions", num(s["sessions"]), span(s["first"], s["last"]))
-row("transcripts", size(s["disk_bytes"]), "on disk under ~/.claude/projects")
-row("biggest session", num(s["biggest"]), "tokens")
-row("typical session", num(s["baseline_median"]), "tokens")
-if s["memo_median"]:
-    print()
-    comparison(s["baseline_median"], s["memo_median"], s["saved_tokens"],
-               s["saved_percent"], s["ratio"],
-               "tokens - a typical session, resumed",
-               "tokens - a typical memo instead")
-if s["projects"] - s["projects_memo"]:
-    print()
-    print("    %s here with sessions but no memo yet."
-          % plural(s["projects"] - s["projects_memo"], "project"))
+row("with a memo", num(s["projects_memo"]), "of %d" % s["projects"])
+if s["starts"]:
+    row("starts", num(s["starts"]), "since %s" % day(s["since"]))
+else:
+    row("starts", "0", "counting from now on")
 print()
 
-if summary["saved_total"]:
-    s = summary
-    print("  " + "=" * 72)
-    print("   OVERALL SAVED   %13s tokens   over %s in %s"
-          % (num(s["saved_total"]), plural(s["sessions"], "session"),
-             plural(s["projects"], "project")))
-    print("  " + "=" * 72)
-    print("   Every recorded session against its own measured size, had each been")
-    print("   picked up from a memo instead of resumed.")
-    print()
+print("  " + "=" * 44)
+print("   SAVED BY CONTEXT ENGINE  %14s" % num(s["saved_real"]))
+print("  " + "=" * 44)
+print()
 
-if FALLBACK:
-    print("  Seed a memo here and the same applies to this project:")
-    print("    mkdir -p .claude/memory && $EDITOR .claude/memory/PROJECT_CONTEXT.md")
-    print()
-
-print("  Reading this: without a memo, the way back into a project is `claude --resume`,")
-print("  which reloads everything that session was holding when it ended - the cold")
-print("  number. With a memo you load the memo instead. Same starting point, that much")
-print("  less to pay for. `/clear` is the button: it drops the chat context and the")
+print("  Counts session starts that actually received the memo -")
+print("  nothing hypothetical. \"A resume\" is what reloading that")
+print("  project's last session costs, read from the transcript's")
+print("  own token counts. /clear drops the chat context and the")
 print("  memo goes straight back in.")
 print()
-print("  The cold number is not an estimate - Claude Code writes a token count into")
-print("  every transcript and this reads the last one. Only the memo side is estimated,")
-print("  at four characters per token. Only the pick-up changes: what a session grows")
-print("  to while you work is the same either way, and the full transcript stays in")
-print("  .claude/memory/backups/ when you need the detail back.")
-print()
-PY
+ENDPY

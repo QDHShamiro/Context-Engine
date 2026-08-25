@@ -25,6 +25,10 @@ COMMITS=$(git -C "$ROOT" log -5 --format='%h %ad %s' --date=short 2>/dev/null)
 [ -n "$LOG" ] || [ -n "$COMMITS" ] || exit 0
 
 if [ -n "$LOG" ]; then
+  # Record the injection. Counting what actually happened is the only honest
+  # basis for a savings figure; everything else is a hypothetical.
+  printf '%s %s\n' "$(date +%s)" "$(( $(printf '%s' "$LOG" | wc -c) / 4 ))" \
+    >> "$(ce_memdir "$ROOT")/.starts" 2>/dev/null || true
   echo "$LOG"
 else
   echo "# Project memory — $(basename "$ROOT")"

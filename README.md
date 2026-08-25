@@ -167,37 +167,28 @@ also the one that writes it. `--all` adds a machine-wide summary:
 ```
   Context Engine
 
-    sessions                     1   today
-    memo                       810   tokens, 49 lines, updated today
-    transcripts               3 MB   on disk
+    memo                  810   tokens, 49 lines
+    a resume          337,754   tokens
+                    ---------
+    saved per start   336,944   99.8% less, 417.0x
 
-    picking up cold        313,834   tokens - what resuming the last session costs
-    picking up by memo         810   tokens - your memo instead
-                        ----------
-    you save               313,024   99.7% less, 387.4x smaller
+    starts                 12   since 2026-08-25
+    saved so far    4,043,328   tokens
 
-  Overall - everything on this machine
+  All projects
 
-    projects                    22   2 with a memo, 20 without
-    sessions                   129   2026-08-01 to today
-    transcripts             364 MB   on disk under ~/.claude/projects
-    biggest session        842,842   tokens
-    typical session        137,701   tokens
+    with a memo             2   of 22
+    starts                 18   since 2026-08-25
 
-    picking up cold        137,701   tokens - a typical session, resumed
-    picking up by memo         810   tokens - a typical memo instead
-                        ----------
-    you save               136,891   99.4% less, 170.0x smaller
-
-    20 projects here with sessions but no memo yet.
-
-  ========================================================================
-   OVERALL SAVED      27,841,195 tokens   over 129 sessions in 22 projects
-  ========================================================================
+  ============================================
+   SAVED BY CONTEXT ENGINE       5,982,104
+  ============================================
 ```
 
-The overall block prints in every mode — it is the number you came for, not something to pass a
-flag for. `--all` swaps the single project at the top for a per-project breakdown.
+**It counts what happened, not what could have.** Every session start that actually receives the
+memo appends a line to `.claude/memory/.starts`, and the total is the sum over those lines. A
+figure covering every session ever recorded would be a hypothetical dressed up as a measurement,
+so a fresh install honestly reports zero and counts up from there.
 
 Without a memo, the way back into a project is `claude --resume`, which reloads everything that
 session was holding when it ended — the cold number. With a memo you load the memo instead. Same
