@@ -48,7 +48,9 @@ MARK = "context-memory"
 
 # Stop takes no matcher: it always fires.
 SPECS = [
-    ("SessionStart", "startup|resume|compact", start_cmd,   15),
+    # clear is the point of the whole thing: /clear drops the chat context and
+    # this puts the memo straight back, so it doubles as a reset button.
+    ("SessionStart", "startup|clear|compact|resume", start_cmd, 15),
     ("PreCompact",   "manual|auto",            compact_cmd, 30),
     ("SessionEnd",   "*",                      end_cmd,     10),
     ("Stop",         None,                     stop_cmd,    10),

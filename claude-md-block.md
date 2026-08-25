@@ -31,6 +31,9 @@ One or two lines.
 ```
 
 Rules:
+- **Write it in English**, whatever language the conversation is in. This file is re-read at every
+  session start forever; English tokenises tighter and the models read it better, so the same
+  meaning costs fewer tokens and survives the round trip more accurately.
 - One line per entry. Say **what** and **why**, never how — the code already says how.
 - Delete entries that stopped being true. Never append a correction under a stale line.
 - Whole file stays under ~60 lines. Past that, compress the oldest `Decisions` into one line.

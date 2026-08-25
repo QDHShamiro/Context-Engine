@@ -82,7 +82,7 @@ project**, with nothing to install per repo.
 
 | Hook | Event | Matcher | Timeout |
 |---|---|---|---|
-| `session-start-context.sh` | `SessionStart` | `startup\|resume\|compact` | 15s |
+| `session-start-context.sh` | `SessionStart` | `startup\|clear\|compact\|resume` | 15s |
 | `pre-compact-backup.sh` | `PreCompact` | `manual\|auto` | 30s |
 | `session-end-log.sh` | `SessionEnd` | `*` | 10s |
 | `stop-memo-check.sh` | `Stop` | none — `Stop` takes no matcher | 10s |
@@ -259,6 +259,9 @@ One or two lines.
 
 The rules that ship in `CLAUDE.md`:
 
+- **Written in English**, whatever language you work in. The memo is re-read at every session start
+  forever; English tokenises tighter and the models read it more accurately, so the same meaning
+  costs less and survives the round trip better.
 - One line per entry. Say **what** and **why**, never **how** — the code already says how, and a
   memo that describes implementation is stale the week after it is written.
 - Delete entries that stopped being true. Never append a correction under a stale line.
@@ -270,9 +273,14 @@ The rules that ship in `CLAUDE.md`:
 
 ## Using it well
 
+**`/clear` is the reset button.** It drops the chat context, and the `SessionStart` hook puts the
+memo straight back — so you carry on in the same terminal with the state and none of the
+accumulation. That is the moment the numbers below actually happen. Nothing is lost: the transcript
+stays under `~/.claude/projects/`, and `claude --resume` still reaches it.
+
 **Let Claude write it.** You should not have to ask. If it drifts in a long session, "update the
-project memory" is enough, and the `Stop` check catches the session that changed the repo and
-recorded nothing.
+project memory" is enough, `/memory-stats` updates it on the spot, and the `Stop` check catches the
+session that changed the repo and recorded nothing.
 
 **Keep it short — this is the whole trade.** The memo is injected at *every* session start, so
 every line you add is a line you pay for in every future session in that repo. A 200-line memo is
@@ -342,7 +350,7 @@ No config file. Three switches:
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|compact",
+        "matcher": "startup|clear|compact|resume",
         "hooks": [{ "type": "command", "command": "\"C:/Program Files/Git/usr/bin/bash.exe\" \"C:/Users/you/.claude/hooks/context-memory/session-start-context.sh\"", "timeout": 15 }]
       }
     ],
@@ -369,8 +377,10 @@ No config file. Three switches:
 
 On Linux and macOS the `command` is just the script path, with no `bash.exe` prefix.
 
-`SessionStart` deliberately omits the `clear` and `fork` matchers. Add them if you want the memo
-injected after `/clear` too.
+`fork` is the one `SessionStart` matcher left out: a forked session carries its parent's context,
+so the memo would be duplicate. `resume` is included for the same reason it is arguable — the
+transcript is already loaded, so the memo costs its own size for nothing there. Drop it from the
+matcher if that bothers you.
 
 ---
 
