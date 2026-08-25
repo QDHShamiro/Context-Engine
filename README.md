@@ -230,7 +230,7 @@ Per project, all inside `<project>/.claude/memory/`:
 | | |
 |---|---|
 | `PROJECT_CONTEXT.md` | The rolling memo - where the project is now. Injected every session start. |
-| `sessions/Session_Context_<date>_<id>.md` | One note per session: what was done, why, what was tried and rejected. Listed at session start, read on demand. |
+| `sessions/Session_Context_<title>_<id>.md` | One note per session: what was done, why, what was tried and rejected. Named after the session's title and renamed when that changes. Listed at session start, read on demand. |
 | `SESSION_LOG.md` | One row per session. |
 | `.starts` | One line per session start that actually received the memo. Backs the savings figure. |
 | `backups/` | Pre-compaction transcripts, newest 5. |
@@ -260,7 +260,7 @@ Two files, different jobs, and the difference is the whole design:
 | File | Injected at session start? | Therefore |
 |---|---|---|
 | `PROJECT_CONTEXT.md` | **Yes, every time** | Must stay short. You pay for it forever. |
-| `sessions/Session_Context_<date>_<id>.md` | No — only its name and title are listed | Can hold the detail. Written once, read on demand. |
+| `sessions/Session_Context_<title>_<id>.md` | No — only its name and title are listed | Can hold the detail. Written once, read on demand. |
 
 Both are maintained by Claude, not by you: the block `install.sh` appends to `~/.claude/CLAUDE.md`
 sets the rules and the split.

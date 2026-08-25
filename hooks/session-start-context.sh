@@ -13,10 +13,9 @@ CTX="$MEM/PROJECT_CONTEXT.md"
 SDIR="$MEM/sessions"
 LOG=""
 
-# This session's own note file. Named so it sorts chronologically and so the
-# session id stays traceable back to the transcript under ~/.claude/projects.
-SID_SHORT=$(printf '%s' "${CE_session_id:-unknown}" | cut -c1-8)
-SFILE="Session_Context_$(date +%Y-%m-%d)_${SID_SHORT}.md"
+# This session's own note file, named after the session's own title. Renamed in
+# place if the session has been retitled since the last start.
+SFILE=$(ce_session_file "$MEM")
 
 # Stamp the start of the working session: the Stop hook compares the memo's mtime
 # and the repo's HEAD against this to decide whether anything went unrecorded.

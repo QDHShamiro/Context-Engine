@@ -7,7 +7,7 @@ is the whole point:
 | File | Injected at session start? | Therefore |
 |---|---|---|
 | `PROJECT_CONTEXT.md` | **Yes, every time** | Must stay short. You pay for it forever. |
-| `sessions/Session_Context_<date>_<id>.md` | No — only its name is listed | Can hold the detail. Written once, read on demand. |
+| `sessions/Session_Context_<title>_<id>.md` | No — only its name is listed | Can hold the detail. Written once, read on demand. |
 
 Keep both current yourself. Nobody will ask.
 
@@ -44,10 +44,12 @@ One or two lines.
 - No code, no diffs, no logs, no file listings. Git has the changelog and the last five commits are
   injected right beside this.
 
-### `sessions/Session_Context_<date>_<id>.md` — this session's notes
+### `sessions/Session_Context_<title>_<id>.md` — this session's notes
 
-One file per session. The session-start injection tells you this session's filename and lists the
-last few earlier ones by name and title. Write it as you go, not from memory at the end.
+One file per session, named after the session's own title. Rename the session and the file follows
+at the next session start or end; the short session id in the name is what keeps it findable. The
+session-start injection tells you this session's filename and lists the last few earlier ones by
+name and title. Write it as you go, not from memory at the end.
 
 ```markdown
 # <one-line summary of what this session was about>
