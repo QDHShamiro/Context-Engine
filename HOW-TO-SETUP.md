@@ -96,7 +96,31 @@ Interfaces before implementations; verify each layer before building on it.
 2. **One hook script per event.** Each sources `_lib.sh`, does one thing, exits explicitly.
 3. **`install.sh`** — copy, merge, append, gitignore. Idempotent.
 4. **`claude-md-block.md`** — the instruction appended to `~/.claude/CLAUDE.md`.
-5. **Verify** (section 6) before committing.
+5. **`hooks/memory-stats.sh`** and the `/memory-stats` command file the installer writes to
+   `~/.claude/commands/`. Not a hook; it lives in `hooks/` only so the installer's `cp hooks/*.sh`
+   picks it up.
+6. **Verify** (section 6) before committing.
+
+### Measuring the saving
+
+Do not estimate the baseline, and do not put a number in the README you cannot regenerate.
+
+Every assistant record in a transcript carries a real `usage` block. The tokens a session was
+holding when it ended is `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`
+from the last such record — that is the cost of `claude --resume`, and therefore the honest
+baseline for what the memo replaces. Only the memo side is estimated (characters ÷ 4), and the
+output says so.
+
+Read the transcript from the tail. They reach 50 MB; seek to the last 1 MB, drop the partial first
+line, and scan only lines containing `"usage"`.
+
+Map a project root to its transcript directory by reading the `cwd` field out of a transcript, not
+by reconstructing Claude Code's directory slug. The slug encoding is undocumented and a wrong
+guess reports zero sessions instead of failing.
+
+State the boundary of the claim in the output itself: only the cold start improves, what a session
+accumulates while running is unchanged, and the memo is a summary rather than a replacement for
+the transcript.
 
 ### `_lib.sh` contract
 
@@ -291,3 +315,5 @@ for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; ba
 8. Ship the debug affordance with the first version, not after the first mystery.
 9. Never claim a leg is verified because a neighbouring leg passed. If `/compact` was never
    observed, say so.
+10. Every performance number is measured from data on disk and reproducible by a command the
+    README names. State what was compared and what the claim excludes.

@@ -83,7 +83,22 @@ io.open(claude_md, "w", encoding="utf-8").write(cur.rstrip() + "\n\n" + block + 
 print("CLAUDE.md: memory instruction block written")
 PY
 
-# 4. keep .claude/memory out of every repo ------------------------------------
+# 4. /memory-stats slash command ---------------------------------------------
+mkdir -p "$CLAUDE_DIR/commands"
+cat > "$CLAUDE_DIR/commands/memory-stats.md" <<CMD
+---
+description: Show what the project memo saves at session start
+allowed-tools: Bash(bash:*)
+---
+
+!\`bash "$DEST/memory-stats.sh" \$ARGUMENTS\`
+
+Show that output verbatim. The numbers come from the transcripts' own usage
+records - do not recompute, round, or embellish them.
+CMD
+echo "command: /memory-stats installed"
+
+# 5. keep .claude/memory out of every repo ------------------------------------
 GI=$(git config --global core.excludesFile 2>/dev/null || true)
 if [ -z "$GI" ]; then
   GI="~/.gitignore_global"

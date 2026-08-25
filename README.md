@@ -1,4 +1,24 @@
-# Context Engine
+<h1 align="center">Context Engine</h1>
+
+<p align="center">
+  <em>The project remembers. You stop re-explaining it.</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/hooks-4-111111?style=flat-square" alt="4 hooks">
+  <img src="https://img.shields.io/badge/claude%20code-v2.1.191%2B-111111?style=flat-square" alt="Claude Code v2.1.191+">
+  <img src="https://img.shields.io/badge/deps-python3%20%2B%20git-111111?style=flat-square" alt="Python 3 and Git">
+  <img src="https://img.shields.io/badge/license-MIT-111111?style=flat-square" alt="MIT license">
+</p>
+
+<p align="center">
+  <strong>~300&times; smaller cold start &middot; 145,261 &rarr; 480 tokens</strong><br>
+  <sub>Median session-end context across 127 real sessions in 22 projects, read from the
+  transcripts' own <code>usage</code> records — not an estimate. Measured against a 480-token memo.
+  Run <code>/memory-stats --all</code> to reproduce it on your own machine.</sub>
+</p>
+
+---
 
 Four Claude Code hooks that carry project state between sessions, for every project on the
 machine.
@@ -138,6 +158,38 @@ every turn, this hook reads no stdin and spawns no Python — it is two git call
 
 ---
 
+## What it saves
+
+`/memory-stats` reports it for the current project; `--all` adds a machine-wide summary:
+
+```
+  machine-wide
+    sessions                 127          across 22 projects
+    resume baseline      145,261 tokens   median session-end context
+    memo                     480 tokens   median where one exists
+    cold start            302.6x          smaller
+```
+
+**What is being compared.** Without a memo, the way to get state back is `claude --resume`, which
+costs whatever that session was holding when it ended. That figure is not estimated — every
+assistant record in a transcript carries a `usage` block, and the script takes
+`input_tokens + cache_read_input_tokens + cache_creation_input_tokens` from the last one. Only the
+memo side is estimated, at four characters per token.
+
+**What it does not claim.** Only the cold start changes. What you build up *during* a session is
+unchanged, and the memo is a summary rather than a replacement — when you need the detail back,
+that is what `.claude/memory/backups/` is for.
+
+Without the slash command:
+
+```bash
+bash ~/.claude/hooks/context-memory/memory-stats.sh          # this project
+bash ~/.claude/hooks/context-memory/memory-stats.sh --all    # everything, plus summary
+bash ~/.claude/hooks/context-memory/memory-stats.sh --json   # machine-readable
+```
+
+---
+
 ## Files
 
 Per project, all inside `<project>/.claude/memory/`:
@@ -158,8 +210,9 @@ At user level:
 
 | | |
 |---|---|
-| `~/.claude/hooks/context-memory/*.sh` | The five scripts. |
+| `~/.claude/hooks/context-memory/*.sh` | The hook scripts and `memory-stats.sh`. |
 | `~/.claude/settings.json` | Four hook entries. |
+| `~/.claude/commands/memory-stats.md` | The `/memory-stats` slash command. |
 | `~/.claude/CLAUDE.md` | The memo-maintenance block. |
 | `~/.gitignore_global` | `.claude/memory/` — unless `core.excludesFile` already pointed elsewhere. |
 
@@ -307,7 +360,7 @@ injected after `/clear` too.
 ## Uninstall
 
 ```bash
-rm -rf ~/.claude/hooks/context-memory
+rm -rf ~/.claude/hooks/context-memory ~/.claude/commands/memory-stats.md
 ```
 
 Then remove the four hook groups whose `command` contains `context-memory` from
@@ -405,9 +458,11 @@ hooks/
   pre-compact-backup.sh      PreCompact
   session-end-log.sh         SessionEnd
   stop-memo-check.sh         Stop
+  memory-stats.sh            not a hook — backs /memory-stats
 claude-md-block.md           the block appended to ~/.claude/CLAUDE.md
-install.sh                   copy, merge, append, gitignore
+install.sh                   copy, merge, append, command, gitignore
 HOW-TO-SETUP.md              build/verify runbook, written for Claude Code
+LICENSE                      MIT
 ```
 
 ---
