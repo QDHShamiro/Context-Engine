@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <strong>~300&times; smaller cold start &middot; 145,261 &rarr; 480 tokens</strong><br>
+  <strong>99.6% of the cold start, gone &middot; 145,261 &rarr; 590 tokens</strong><br>
   <sub>Median session-end context across 127 real sessions in 22 projects, read from the
-  transcripts' own <code>usage</code> records — not an estimate. Measured against a 480-token memo.
+  transcripts' own <code>usage</code> records — only the memo side is an estimate.
   Run <code>/memory-stats --all</code> to reproduce it on your own machine.</sub>
 </p>
 
@@ -166,9 +166,15 @@ every turn, this hook reads no stdin and spawns no Python — it is two git call
   machine-wide
     sessions                 127          across 22 projects
     resume baseline      145,261 tokens   median session-end context
-    memo                     480 tokens   median where one exists
-    cold start            302.6x          smaller
+    memo                     590 tokens   median where one exists
+    saved per start      144,671 tokens   99.6% of the cold start
+    cold start            246.2x          smaller
+    saved across all  27,648,387 tokens   had every session started from a memo
 ```
+
+The last line is a hypothetical and labelled as one: it is every recorded session's own baseline
+minus a memo, i.e. what those sessions would have cost had each started from a memo rather than a
+resume. The lines above it are direct measurements.
 
 **What is being compared.** Without a memo, the way to get state back is `claude --resume`, which
 costs whatever that session was holding when it ended. That figure is not estimated — every

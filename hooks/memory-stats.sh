@@ -119,6 +119,8 @@ def measure(root, files):
         "baseline_median": med,
         "memo_tokens": tok,
         "memo_lines": lines,
+        "saved_tokens": max(0, med - tok) if tok and med else 0,
+        "saved_percent": round((med - tok) * 100.0 / med, 1) if tok and med else 0,
         "ratio": round(med / tok, 1) if tok and med else 0,
         "backup_files": n,
         "backup_bytes": b,
@@ -149,8 +151,12 @@ summary = {
     "baseline_median": median(every),
     "memo_median": median(memos),
 }
-summary["ratio"] = (round(summary["baseline_median"] / summary["memo_median"], 1)
-                    if summary["memo_median"] and summary["baseline_median"] else 0)
+_m, _b = summary["memo_median"], summary["baseline_median"]
+summary["ratio"]         = round(_b / _m, 1) if _m and _b else 0
+summary["saved_tokens"]  = max(0, _b - _m) if _m and _b else 0
+summary["saved_percent"] = round((_b - _m) * 100.0 / _b, 1) if _m and _b else 0
+# Every recorded session, had it started from a memo instead of a resume.
+summary["saved_total"]   = sum(max(0, s - _m) for s in every) if _m else 0
 
 for r in rows:
     r.pop("_sizes")
@@ -180,6 +186,8 @@ for r in sorted(shown, key=lambda r: -r["ratio"]):
         print("    resume baseline      %7s tokens   median session-end context"
               % "{:,}".format(r["baseline_median"]))
     if r["ratio"]:
+        print("    saved per start      %7s tokens   %s%% of the cold start"
+              % ("{:,}".format(r["saved_tokens"]), r["saved_percent"]))
         print("    cold start           %7s          smaller" % ("%sx" % r["ratio"]))
     if r["backup_files"]:
         print("    backups              %7d files   %s"
@@ -196,7 +204,11 @@ if ALL:
     if summary["memo_median"]:
         print("    memo                 %7s tokens   median where one exists"
               % "{:,}".format(summary["memo_median"]))
+        print("    saved per start      %7s tokens   %s%% of the cold start"
+              % ("{:,}".format(summary["saved_tokens"]), summary["saved_percent"]))
         print("    cold start           %7s          smaller" % ("%sx" % summary["ratio"]))
+        print("    saved across all  %10s tokens   had every session started from a memo"
+              % "{:,}".format(summary["saved_total"]))
     if unseeded:
         print("    %d project(s) have sessions but no memo yet." % unseeded)
     print()
