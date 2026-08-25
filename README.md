@@ -160,7 +160,9 @@ every turn, this hook reads no stdin and spawns no Python — it is two git call
 
 ## What it saves
 
-`/memory-stats` reports it for the current project; `--all` adds a machine-wide summary:
+`/memory-stats` does two things: it reports the saving, then brings this project's memo up to
+date — creating it if there is none. So the command that tells you the memo is worth having is
+also the one that writes it. `--all` adds a machine-wide summary:
 
 ```
   machine-wide

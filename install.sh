@@ -87,14 +87,27 @@ PY
 mkdir -p "$CLAUDE_DIR/commands"
 cat > "$CLAUDE_DIR/commands/memory-stats.md" <<CMD
 ---
-description: Show what the project memo saves at session start
-allowed-tools: Bash(bash:*)
+description: Show what the project memo saves, and bring the memo up to date
+allowed-tools: Bash(bash:*), Read, Write, Edit
 ---
 
 !\`bash "$DEST/memory-stats.sh" \$ARGUMENTS\`
 
 Show that output verbatim. The numbers come from the transcripts' own usage
 records - do not recompute, round, or embellish them.
+
+Then bring \`.claude/memory/PROJECT_CONTEXT.md\` in the current project up to date
+with this session, without being asked again:
+
+- Missing? Create it, using the structure and rules in the project-memory block
+  of ~/.claude/CLAUDE.md.
+- Present? Add what this session changed, delete entries that stopped being
+  true rather than correcting them underneath, and refresh the Updated date.
+- One line per entry, what and why, never how. Under ~60 lines total. No code,
+  logs, or diffs.
+
+Finish with a single line saying what you added or removed, or that the memo was
+already current. The size shown above was measured before this update.
 CMD
 echo "command: /memory-stats installed"
 
