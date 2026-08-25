@@ -205,43 +205,55 @@ if FALLBACK:
 else:
     shown = [r for r in rows if r["memo_tokens"] or (not ALL and r["sessions"])]
 
+RULE = " " * 24 + "-" * 16
+
+
+def plural(n, word):
+    return "%d %s%s" % (n, word, "" if n == 1 else "s")
+
+
 for r in sorted(shown, key=lambda r: -r["ratio"]):
     print("  %s" % r["project"])
-    if r["memo_tokens"]:
-        print("    memo                 %7s tokens   %d lines"
-              % ("{:,}".format(r["memo_tokens"]), r["memo_lines"]))
-    else:
-        print("    memo                       -        not seeded yet")
-    print("    sessions             %7d" % r["sessions"])
+    print()
     if r["baseline_median"]:
-        print("    resume baseline      %7s tokens   median session-end context"
+        print("    picking up cold     %9s tokens   what resuming the last session costs"
               % "{:,}".format(r["baseline_median"]))
+    if r["memo_tokens"]:
+        print("    picking up by memo  %9s tokens   PROJECT_CONTEXT.md, %s"
+              % ("{:,}".format(r["memo_tokens"]), plural(r["memo_lines"], "line")))
+    else:
+        print("    picking up by memo          -           no memo written here yet")
     if r["ratio"]:
-        print("    saved per start      %7s tokens   %s%% of the cold start"
-              % ("{:,}".format(r["saved_tokens"]), r["saved_percent"]))
-        print("    cold start           %7s          smaller" % ("%sx" % r["ratio"]))
+        print(RULE)
+        print("    you save            %9s tokens   %s%% less, %sx smaller"
+              % ("{:,}".format(r["saved_tokens"]), r["saved_percent"], r["ratio"]))
+    print()
+    tail = "    measured over %s" % plural(r["sessions"], "recorded session")
     if r["backup_files"]:
-        print("    backups              %7d files   %s"
-              % (r["backup_files"], human(r["backup_bytes"])))
+        tail += ", %s of transcript kept in backups" % human(r["backup_bytes"])
+    print(tail)
     print()
 
 if ALL or FALLBACK:
     unseeded = len([r for r in rows if r["sessions"] and not r["memo_tokens"]])
-    print("  machine-wide")
-    print("    sessions             %7s          across %d projects"
-          % ("{:,}".format(summary["sessions"]), summary["projects"]))
-    print("    resume baseline      %7s tokens   median session-end context"
-          % "{:,}".format(summary["baseline_median"]))
+    print("  Everything on this machine")
+    print()
+    print("    picking up cold     %9s tokens   typical session, %s in %s"
+          % ("{:,}".format(summary["baseline_median"]),
+             plural(summary["sessions"], "session"), plural(summary["projects"], "project")))
     if summary["memo_median"]:
-        print("    memo                 %7s tokens   median where one exists"
+        print("    picking up by memo  %9s tokens   typical memo"
               % "{:,}".format(summary["memo_median"]))
-        print("    saved per start      %7s tokens   %s%% of the cold start"
-              % ("{:,}".format(summary["saved_tokens"]), summary["saved_percent"]))
-        print("    cold start           %7s          smaller" % ("%sx" % summary["ratio"]))
-        print("    saved across all  %10s tokens   had every session started from a memo"
+        print(RULE)
+        print("    you save            %9s tokens   %s%% less, %sx smaller"
+              % ("{:,}".format(summary["saved_tokens"]), summary["saved_percent"], summary["ratio"]))
+        print()
+        print("    Add every session up and that is %s tokens, if each had started"
               % "{:,}".format(summary["saved_total"]))
+        print("    from a memo instead of a resume.")
     if unseeded:
-        print("    %d project(s) have sessions but no memo yet." % unseeded)
+        print()
+        print("    %s here with sessions but no memo yet." % plural(unseeded, "project"))
     print()
 
 if FALLBACK:
@@ -249,9 +261,15 @@ if FALLBACK:
     print("    mkdir -p .claude/memory && $EDITOR .claude/memory/PROJECT_CONTEXT.md")
     print()
 
-print("  Baseline is what resuming the previous session costs: the tokens that session")
-print("  held when it ended, read from the transcript's own usage records. Memo size is")
-print("  estimated at 4 characters per token. The memo is a summary, not a replacement")
-print("  for the transcript - .claude/memory/backups/ keeps that.")
+print("  Reading this: without a memo, the way back into a project is `claude --resume`,")
+print("  which reloads everything that session was holding when it ended - the cold")
+print("  number. With a memo you load the memo instead. Same starting point, that much")
+print("  less to pay for.")
+print()
+print("  The cold number is not an estimate: Claude Code writes a token count into every")
+print("  transcript and this reads the last one. Only the memo side is estimated, at four")
+print("  characters per token. Only the pick-up changes - what a session grows to while")
+print("  you work is the same either way, and the full transcript is still in")
+print("  .claude/memory/backups/ when you need the detail.")
 print()
 PY

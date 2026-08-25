@@ -165,18 +165,23 @@ date — creating it if there is none. So the command that tells you the memo is
 also the one that writes it. `--all` adds a machine-wide summary:
 
 ```
-  machine-wide
-    sessions                 127          across 22 projects
-    resume baseline      145,261 tokens   median session-end context
-    memo                     590 tokens   median where one exists
-    saved per start      144,671 tokens   99.6% of the cold start
-    cold start            246.2x          smaller
-    saved across all  27,648,387 tokens   had every session started from a memo
+  Everything on this machine
+
+    picking up cold       145,261 tokens   typical session, 128 sessions in 22 projects
+    picking up by memo        734 tokens   typical memo
+                        ----------------
+    you save              144,527 tokens   99.5% less, 197.9x smaller
+
+    Add every session up and that is 27,735,922 tokens, if each had started
+    from a memo instead of a resume.
 ```
 
-The last line is a hypothetical and labelled as one: it is every recorded session's own baseline
-minus a memo, i.e. what those sessions would have cost had each started from a memo rather than a
-resume. The lines above it are direct measurements.
+Without a memo, the way back into a project is `claude --resume`, which reloads everything that
+session was holding when it ended — the cold number. With a memo you load the memo instead. Same
+starting point, that much less to pay for.
+
+The cumulative line is the one hypothetical and is labelled as one; the lines above it are direct
+measurements.
 
 **What is being compared.** Without a memo, the way to get state back is `claude --resume`, which
 costs whatever that session was holding when it ended. That figure is not estimated — every
