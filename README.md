@@ -165,16 +165,39 @@ date — creating it if there is none. So the command that tells you the memo is
 also the one that writes it. `--all` adds a machine-wide summary:
 
 ```
-  Everything on this machine
+  Context Engine
 
-    picking up cold       145,261 tokens   typical session, 128 sessions in 22 projects
-    picking up by memo        734 tokens   typical memo
-                        ----------------
-    you save              144,527 tokens   99.5% less, 197.9x smaller
+    sessions                     1   today
+    memo                       810   tokens, 49 lines, updated today
+    transcripts               3 MB   on disk
 
-    Add every session up and that is 27,735,922 tokens, if each had started
-    from a memo instead of a resume.
+    picking up cold        313,834   tokens - what resuming the last session costs
+    picking up by memo         810   tokens - your memo instead
+                        ----------
+    you save               313,024   99.7% less, 387.4x smaller
+
+  Overall - everything on this machine
+
+    projects                    22   2 with a memo, 20 without
+    sessions                   129   2026-08-01 to today
+    transcripts             364 MB   on disk under ~/.claude/projects
+    biggest session        842,842   tokens
+    typical session        137,701   tokens
+
+    picking up cold        137,701   tokens - a typical session, resumed
+    picking up by memo         810   tokens - a typical memo instead
+                        ----------
+    you save               136,891   99.4% less, 170.0x smaller
+
+    20 projects here with sessions but no memo yet.
+
+  ========================================================================
+   OVERALL SAVED      27,841,195 tokens   over 129 sessions in 22 projects
+  ========================================================================
 ```
+
+The overall block prints in every mode — it is the number you came for, not something to pass a
+flag for. `--all` swaps the single project at the top for a per-project breakdown.
 
 Without a memo, the way back into a project is `claude --resume`, which reloads everything that
 session was holding when it ended — the cold number. With a memo you load the memo instead. Same

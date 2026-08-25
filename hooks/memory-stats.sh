@@ -197,23 +197,22 @@ def measure(root, files):
 
 dirs = project_dirs()
 
+# The machine-wide figures are always computed, whichever mode we are in: the
+# overall total is the point of the report, not an extra you have to ask for.
+all_rows = [measure(root, files) for root, files in dirs]
+
 if ALL:
-    rows = [measure(root, files) for root, files in dirs]
-    FALLBACK = False
+    rows, FALLBACK = all_rows, False
 else:
     # Sessions started in a subdirectory are recorded under that path, so take
     # everything at or below the project root, not just an exact match.
     files = [f for root, fs in dirs if under(root, CWD) for f in fs]
     rows = [measure(CWD, files)]
-    # Nothing here yet: show the machine-wide picture rather than a dead end,
-    # so the number the user came for is on screen either way.
     FALLBACK = not rows[0]["sessions"] and not rows[0]["memo_tokens"]
-    if FALLBACK:
-        rows = [measure(root, fs) for root, fs in dirs]
 
-every    = [s for r in rows for s in r["_sizes"]]
-memos    = [r["memo_tokens"] for r in rows if r["memo_tokens"]]
-scored   = [r for r in rows if r["sessions"]]
+every    = [s for r in all_rows for s in r["_sizes"]]
+memos    = [r["memo_tokens"] for r in all_rows if r["memo_tokens"]]
+scored   = [r for r in all_rows if r["sessions"]]
 med_base = median(every)
 med_memo = median(memos)
 
@@ -223,8 +222,8 @@ summary = {
     "sessions":       len(every),
     "first":          min([r["first"] for r in scored] or [0]),
     "last":           max([r["last"] for r in scored] or [0]),
-    "disk_bytes":     sum(r["disk_bytes"] for r in rows),
-    "biggest":        max([r["biggest"] for r in rows] or [0]),
+    "disk_bytes":     sum(r["disk_bytes"] for r in all_rows),
+    "biggest":        max([r["biggest"] for r in all_rows] or [0]),
     "baseline_median": med_base,
     "memo_median":    med_memo,
     "saved_tokens":   max(0, med_base - med_memo) if med_memo and med_base else 0,
@@ -234,8 +233,8 @@ summary = {
     "saved_total":    sum(max(0, s - med_memo) for s in every) if med_memo else 0,
 }
 
-for r in rows:
-    r.pop("_sizes")
+for r in all_rows + rows:
+    r.pop("_sizes", None)
 
 if JSON:
     print(json.dumps({"summary": summary, "projects": rows}, indent=2))
@@ -291,30 +290,38 @@ for r in sorted(shown, key=lambda r: -r["ratio"]):
                    "tokens - your memo instead")
     print()
 
-if ALL or FALLBACK:
-    s = summary
-    print("  Everything on this machine")
+# The overall block always prints: the machine-wide total is the point of the
+# report, not something you should have to pass a flag for.
+s = summary
+print("  Overall - everything on this machine")
+print()
+row("projects", s["projects"],
+    "%d with a memo, %d without" % (s["projects_memo"], s["projects"] - s["projects_memo"]))
+row("sessions", num(s["sessions"]), span(s["first"], s["last"]))
+row("transcripts", size(s["disk_bytes"]), "on disk under ~/.claude/projects")
+row("biggest session", num(s["biggest"]), "tokens")
+row("typical session", num(s["baseline_median"]), "tokens")
+if s["memo_median"]:
     print()
-    row("projects", s["projects"],
-        "%d with a memo, %d without" % (s["projects_memo"], s["projects"] - s["projects_memo"]))
-    row("sessions", num(s["sessions"]), span(s["first"], s["last"]))
-    row("transcripts", size(s["disk_bytes"]), "on disk under ~/.claude/projects")
-    row("biggest session", num(s["biggest"]), "tokens")
-    row("typical session", num(s["baseline_median"]), "tokens")
-    if s["memo_median"]:
-        print()
-        comparison(s["baseline_median"], s["memo_median"], s["saved_tokens"],
-                   s["saved_percent"], s["ratio"],
-                   "tokens - a typical session, resumed",
-                   "tokens - a typical memo instead")
-        print()
-        print("    Add every session up and that is %s tokens, if each had started"
-              % num(s["saved_total"]))
-        print("    from a memo instead of a resume.")
-    if s["projects"] - s["projects_memo"]:
-        print()
-        print("    %s here with sessions but no memo yet."
-              % plural(s["projects"] - s["projects_memo"], "project"))
+    comparison(s["baseline_median"], s["memo_median"], s["saved_tokens"],
+               s["saved_percent"], s["ratio"],
+               "tokens - a typical session, resumed",
+               "tokens - a typical memo instead")
+if s["projects"] - s["projects_memo"]:
+    print()
+    print("    %s here with sessions but no memo yet."
+          % plural(s["projects"] - s["projects_memo"], "project"))
+print()
+
+if summary["saved_total"]:
+    s = summary
+    print("  " + "=" * 72)
+    print("   OVERALL SAVED   %13s tokens   over %s in %s"
+          % (num(s["saved_total"]), plural(s["sessions"], "session"),
+             plural(s["projects"], "project")))
+    print("  " + "=" * 72)
+    print("   Every recorded session against its own measured size, had each been")
+    print("   picked up from a memo instead of resumed.")
     print()
 
 if FALLBACK:
