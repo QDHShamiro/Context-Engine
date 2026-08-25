@@ -102,8 +102,9 @@ What it does:
 Re-running replaces only its own entries. `CLAUDE_CONFIG_DIR` is honoured throughout.
 </details>
 
-**Requirements:** Claude Code v2.1.191+, Python 3, Git. On Windows, the Git Bash that ships with
-Git for Windows.
+**Requirements:** Claude Code v2.1.191+ and Python 3. On Windows, the Git Bash that ships with
+Git for Windows. Git itself is optional — a plain directory works the same, it just has no commit
+log to inject.
 
 **Ships with:** four hooks, the `/memory-stats` command, and the `project-memory` skill that holds
 the rules for writing the memo.
@@ -119,8 +120,9 @@ the rules for writing the memo.
 | **log** | `SessionEnd` — all | One row per session: time, project, id, why it ended. |
 | **enforce** | `Stop` | Once per session, if the repo changed but the memo did not, blocks and asks for the update. |
 
-The `Stop` hook only fires when the working tree is dirty or `HEAD` moved — a read-only question
-never triggers it. Opt out per project with `touch .claude/memory/.no-nag`.
+The `Stop` hook only fires when the project actually moved — a dirty tree or a new `HEAD` in a
+repo, a file written since the session began anywhere else. A read-only question never triggers
+it. Opt out per project with `touch .claude/memory/.no-nag`.
 
 ---
 

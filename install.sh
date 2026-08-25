@@ -122,6 +122,13 @@ CMD
 echo "command: /memory-stats installed"
 
 # 5. keep .claude/memory out of every repo ------------------------------------
+# Optional: the hooks work in directories that are not repos at all.
+if ! command -v git >/dev/null 2>&1; then
+  echo "git: not installed - skipping the global gitignore entry"
+  echo
+  echo "Done. Restart Claude Code (or start a new session) for the hooks to load."
+  exit 0
+fi
 GI=$(git config --global core.excludesFile 2>/dev/null || true)
 if [ -z "$GI" ]; then
   GI="~/.gitignore_global"

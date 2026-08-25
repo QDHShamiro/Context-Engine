@@ -30,9 +30,10 @@ def norm(p):
     return os.path.normcase(os.path.abspath(p)).replace("\\", "/").rstrip("/")
 
 
-def git_root(p):
+def project_root(p):
     """The same definition of "project" the hooks use, so running this from a
-    subdirectory still finds the sessions recorded at the repo root."""
+    subdirectory still finds the sessions recorded at the root - git toplevel
+    when there is one, else the nearest ancestor already holding a memory dir."""
     try:
         r = subprocess.run(["git", "-C", p, "rev-parse", "--show-toplevel"],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
@@ -41,7 +42,15 @@ def git_root(p):
             return out
     except Exception:
         pass
-    return p
+
+    d = os.path.abspath(p)
+    while True:
+        if os.path.isdir(os.path.join(d, ".claude", "memory")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return p
+        d = parent
 
 
 def under(child, parent):
@@ -69,7 +78,7 @@ def plural(n, word):
     return "%d %s%s" % (n, word, "" if n == 1 else "s")
 
 
-CWD = git_root(os.path.abspath(args[0]) if args else os.getcwd())
+CWD = project_root(os.path.abspath(args[0]) if args else os.getcwd())
 
 
 # -------------------------------------------------------------- measuring ---
@@ -242,10 +251,18 @@ else:
     if r["ratio"]:
         block(r)
     else:
+        # A memo with no recorded session yet - a brand new project, or one that
+        # is not a git repo and has simply not been worked in before.
         print("  %s" % r["project"])
         print()
-        row("memo", "-", "none written here yet")
-        row("sessions", num(r["sessions"]), "recorded")
+        if r["memo_tokens"]:
+            row("memo", num(r["memo_tokens"]), "tokens, %s" % plural(r["memo_lines"], "line"))
+            row("sessions", num(r["sessions"]), "recorded - nothing to compare against yet")
+        else:
+            row("memo", "-", "none written here yet")
+            row("sessions", num(r["sessions"]), "recorded")
+        if r["starts"]:
+            row("starts", num(r["starts"]), "since %s" % day(r["since"]))
         print()
 
 s = summary

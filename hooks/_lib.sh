@@ -86,12 +86,26 @@ ce_unix() {
   esac
 }
 
-# ce_root -> project root: git toplevel of the hook's cwd, else the cwd itself
+# ce_root -> project root. Git toplevel when there is one; otherwise the nearest
+# ancestor already holding a .claude/memory, so a plain directory behaves the
+# same as a repo. Falls back to the cwd itself.
 ce_root() {
-  local d
+  local d top
   d=$(ce_unix "$CE_cwd")
   [ -n "$d" ] && [ -d "$d" ] || d=$PWD
-  git -C "$d" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$d"
+
+  if top=$(git -C "$d" rev-parse --show-toplevel 2>/dev/null) && [ -n "$top" ]; then
+    printf '%s' "$top"
+    return 0
+  fi
+
+  top=$d
+  while [ -n "$top" ] && [ "$top" != / ]; do
+    if [ -d "$top/.claude/memory" ]; then printf '%s' "$top"; return 0; fi
+    case "$top" in [A-Za-z]:|/[A-Za-z]) break ;; esac
+    top=${top%/*}
+  done
+  printf '%s' "$d"
 }
 
 # ce_memdir <root> -> <root>/.claude/memory, created on demand

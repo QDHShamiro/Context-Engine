@@ -159,7 +159,7 @@ needs, plus these helpers:
 | `CE_<field>` | one per payload field, empty string when absent — pre-initialised so `set -u` is safe |
 | `CE_INPUT` | the raw stdin, kept for `ce_debug` |
 | `ce_unix <path>` | Windows path → POSIX path |
-| `ce_root` | project root: git toplevel of `CE_cwd`, else `CE_cwd`, else `$PWD` |
+| `ce_root` | project root: git toplevel, else the nearest ancestor holding `.claude/memory`, else the cwd |
 | `CE_title`, `CE_title_slug` | the session's current title and a filename-safe slug of it, read from the transcript in the same call |
 | `ce_memdir <root>` | `<root>/.claude/memory`, created on demand |
 | `ce_session_file <memdir>` | this session's note filename, renaming an existing one when the title changed |
@@ -406,3 +406,7 @@ for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; ba
 14. Run `claude plugin validate` on every manifest and component directory before publishing.
 15. Two install paths must never both register. The standalone installer refuses when the plugin
     is enabled.
+16. Git is a bonus, not a requirement. Find the project root by walking up for `.claude/memory`
+    when there is no repo, and answer "did anything change?" from file mtimes instead of
+    `git status`. A hook that silently does nothing outside a repo is a hook most people never
+    see work.
