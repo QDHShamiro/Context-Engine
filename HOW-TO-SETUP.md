@@ -301,7 +301,9 @@ Derive the project root from `$PWD` via `git rev-parse --show-toplevel`.
 
 ## 7. Verification protocol
 
-Do not report done before all of these pass. `mkjson` builds valid fixtures:
+Do not report done before all of these pass. Start with the automated suite — `bash tests/smoke.sh`
+runs every documented behavior end to end in a throwaway directory — then check the platform cases
+below by hand. `mkjson` builds valid fixtures:
 
 ```bash
 mkjson() { python -c "import json,sys;print(json.dumps(dict(a.split('=',1) for a in sys.argv[1:])))" "$@"; }
