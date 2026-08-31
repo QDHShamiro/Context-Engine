@@ -8,7 +8,7 @@ allowed-tools: Bash(bash:*), Read, Write, Edit
 Show that output verbatim. The numbers come from the transcripts' own usage
 records - do not recompute, round, or embellish them.
 
-Then bring `.claude/memory/PROJECT_CONTEXT.md` in the current project up to date
+Then bring `.claude/memory/<project>_Context.md` in the current project up to date
 with this session, without being asked again:
 
 - Missing? Create it, following the `project-memory` skill.

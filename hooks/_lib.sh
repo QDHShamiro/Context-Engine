@@ -115,6 +115,17 @@ ce_memdir() {
   printf '%s' "$m"
 }
 
+# ce_ctx <memdir> <root> -> path of the rolling memo, <project>_Context.md,
+# named after the project directory. A memo still sitting under the old fixed
+# name PROJECT_CONTEXT.md is migrated in place, so nothing is lost on upgrade.
+ce_ctx() {
+  local ctx="$1/$(basename "$2")_Context.md" old="$1/PROJECT_CONTEXT.md"
+  if [ ! -f "$ctx" ] && [ -f "$old" ]; then
+    mv -f "$old" "$ctx" 2>/dev/null || ctx=$old
+  fi
+  printf '%s' "$ctx"
+}
+
 # ce_session_file <memdir> -> filename of this session's note, renaming an
 # existing one when the session has since been retitled. The short session id
 # stays in the name, so the file is still findable whatever the title becomes.

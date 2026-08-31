@@ -2,7 +2,7 @@
 name: project-memory
 description: >
   How to write and maintain a project's memory files under .claude/memory/ - the rolling
-  PROJECT_CONTEXT.md that is injected at every session start, and the per-session notes archived
+  <project>_Context.md that is injected at every session start, and the per-session notes archived
   beside it. Load this before creating or updating either file. Use when a feature lands, a bug is
   fixed, an architecture or tooling decision is made, when the Stop hook asks for the memo to be
   updated, when /memory-stats runs, or when the user says "update the project memory", "write the
@@ -16,14 +16,16 @@ is the whole point:
 
 | File | Injected at session start? | Therefore |
 |---|---|---|
-| `PROJECT_CONTEXT.md` | **Yes, every time** | Must stay short. You pay for it forever. |
+| `<project>_Context.md` | **Yes, every time** | Must stay short. You pay for it forever. |
 | `sessions/Session_Context_<title>_<id>.md` | No — only its name is listed | Can hold the detail. Written once, read on demand. |
 
-Keep both current yourself. Nobody will ask.
+Keep both current yourself. Nobody will ask. Both files are meant to be **committed with the
+repo** — they travel to every machine and clone; only the hooks' working files (backups, stamps,
+the session log) stay gitignored.
 
-## `PROJECT_CONTEXT.md` — the rolling state
+## `<project>_Context.md` — the rolling state
 
-Where the project *is*, right now. Overwrite it as reality changes. Create it if missing:
+Named after the project directory (e.g. `MyPlugin_Context.md`). Where the project *is*, right now. Overwrite it as reality changes. Create it if missing:
 
 ```markdown
 # <project> — Context
@@ -69,7 +71,7 @@ Session: <id>   Date: <YYYY-MM-DD>
 - <what changed, and where>
 
 ## Why
-- <the reasoning that PROJECT_CONTEXT.md only has room to conclude>
+- <the reasoning that <project>_Context.md only has room to conclude>
 
 ## Tried and rejected
 - <approach> — <why it failed>
@@ -86,17 +88,17 @@ it. Skip the narration.
 ## Which file, when
 
 - A feature lands, a bug is fixed, a decision is made → **both**: the conclusion in
-  `PROJECT_CONTEXT.md`, the reasoning in the session note.
+  `<project>_Context.md`, the reasoning in the session note.
 - An approach fails, a constraint surfaces, something surprises you → **session note only**.
-- Something in `PROJECT_CONTEXT.md` stops being true → **edit it there**, immediately.
+- Something in `<project>_Context.md` stops being true → **edit it there**, immediately.
 
 ## Reading the archive
 
 `## Earlier sessions` in the injected block lists the recent session notes by name and title. When
-an entry in `PROJECT_CONTEXT.md` is too terse to act on, or you are about to redo something that
+an entry in `<project>_Context.md` is too terse to act on, or you are about to redo something that
 might already have been tried, open the relevant file from `.claude/memory/sessions/` and read it
 before starting. That archive is the reason the rolling memo is allowed to be short.
 
-A `Stop` hook checks this once per session: if the repo changed and `PROJECT_CONTEXT.md` did not,
-it blocks and asks. Do not wait for that — a memo written at the end from memory is the one that
+A `Stop` hook checks this once per session: if the repo changed but the memo or this session's
+note did not follow, it blocks and asks. Do not wait for that — a memo written at the end from memory is the one that
 gets the reasons wrong.

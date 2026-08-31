@@ -1,6 +1,12 @@
-# Local working state produced by the hooks themselves. The versioned part of
-# this repo is the setup (hooks/, install.sh), never the memory it generates.
-.claude/memory/
+# Working state produced by the hooks themselves. The memo and session notes
+# under .claude/memory/ are committable; only backups, stamps and logs stay out.
+.claude/memory/backups/
+.claude/memory/.session
+.claude/memory/.starts
+.claude/memory/.debug
+.claude/memory/.no-nag
+.claude/memory/hook-input.log
+.claude/memory/SESSION_LOG.md
 .claude-flow/
 node_modules/
 .claude/proven-config.json

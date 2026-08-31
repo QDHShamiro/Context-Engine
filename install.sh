@@ -106,8 +106,9 @@ allowed-tools: Bash(bash:*), Read, Write, Edit
 Show that output verbatim. The numbers come from the transcripts' own usage
 records - do not recompute, round, or embellish them.
 
-Then bring \`.claude/memory/PROJECT_CONTEXT.md\` in the current project up to date
-with this session, without being asked again:
+Then bring the current project's memo — \`.claude/memory/<project>_Context.md\`,
+named after the project directory — up to date with this session, without being
+asked again:
 
 - Missing? Create it, using the structure and rules in the project-memory block
   of ~/.claude/CLAUDE.md.
@@ -121,10 +122,13 @@ already current. The size shown above was measured before this update.
 CMD
 echo "command: /memory-stats installed"
 
-# 5. keep .claude/memory out of every repo ------------------------------------
+# 5. keep the memory's working files out of every repo ------------------------
+# The memo and session notes are MEANT to be committed - they travel with the
+# repo and survive a machine change. Only the hooks' own working state stays
+# ignored: transcript backups (megabytes), stamps, and the local session log.
 # Optional: the hooks work in directories that are not repos at all.
 if ! command -v git >/dev/null 2>&1; then
-  echo "git: not installed - skipping the global gitignore entry"
+  echo "git: not installed - skipping the global gitignore entries"
   echo
   echo "Done. Restart Claude Code (or start a new session) for the hooks to load."
   exit 0
@@ -138,8 +142,17 @@ GI_FILE=${GI/#\~/$HOME}
 case "$GI_FILE" in [A-Za-z]:*) GI_FILE=$(cygpath -u "$GI_FILE") ;; esac
 mkdir -p "$(dirname "$GI_FILE")"
 touch "$GI_FILE"
-grep -qxF '.claude/memory/' "$GI_FILE" || printf '.claude/memory/\n' >> "$GI_FILE"
-echo "git: .claude/memory/ ignored globally via $GI_FILE"
+# An earlier install ignored the whole memory dir; that line would silently
+# keep the memo out of every repo, so drop it before adding the narrow ones.
+if grep -qxF '.claude/memory/' "$GI_FILE"; then
+  grep -vxF '.claude/memory/' "$GI_FILE" > "$GI_FILE.tmp" && mv "$GI_FILE.tmp" "$GI_FILE"
+fi
+for pat in '.claude/memory/backups/' '.claude/memory/.session' '.claude/memory/.starts' \
+           '.claude/memory/.debug' '.claude/memory/.no-nag' '.claude/memory/hook-input.log' \
+           '.claude/memory/SESSION_LOG.md'; do
+  grep -qxF "$pat" "$GI_FILE" || printf '%s\n' "$pat" >> "$GI_FILE"
+done
+echo "git: memory working files ignored globally via $GI_FILE (memo + session notes stay committable)"
 
 echo
 echo "Done. Restart Claude Code (or start a new session) for the hooks to load."

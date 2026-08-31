@@ -150,7 +150,14 @@ def measure(root, files):
 
     mem = os.path.join(root, ".claude", "memory")
     memo_t = memo_l = 0
-    memo_p = os.path.join(mem, "PROJECT_CONTEXT.md")
+    # The memo is named after the project directory; fall back to the old fixed
+    # name for a project the hooks have not migrated yet.
+    base = os.path.basename(root.rstrip("/\\")) or "PROJECT"
+    memo_p = os.path.join(mem, base + "_Context.md")
+    if not os.path.exists(memo_p):
+        legacy = os.path.join(mem, "PROJECT_CONTEXT.md")
+        if os.path.exists(legacy):
+            memo_p = legacy
     if os.path.exists(memo_p):
         text = io.open(memo_p, encoding="utf-8", errors="replace").read()
         memo_t, memo_l = max(1, len(text) // 4), len(text.splitlines())

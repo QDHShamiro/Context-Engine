@@ -114,7 +114,7 @@ Interfaces before implementations; verify each layer before building on it.
 
 ### Two memory files, not one
 
-`PROJECT_CONTEXT.md` is injected in full at every session start, so it must stay short.
+`<project>_Context.md` is injected in full at every session start, so it must stay short.
 `sessions/Session_Context_<title>_<id>.md` is only ever *listed* - name and title line - so it can
 hold the detail. That asymmetry is the design: the archive is what earns the rolling memo the right
 to be brief. Never inject the archive itself; the moment you do, the saving is gone.

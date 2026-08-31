@@ -118,7 +118,7 @@ the rules for writing the memo.
 | **inject** | `SessionStart` — `startup\|clear\|compact\|resume` | Prints the memo, the last 5 commits, and an index of earlier session notes. `SessionStart` stdout goes straight into Claude's context. |
 | **backup** | `PreCompact` — `manual\|auto` | Copies the full transcript to `backups/` before compaction discards it. Keeps the newest 5. |
 | **log** | `SessionEnd` — all | One row per session: time, project, id, why it ended. |
-| **enforce** | `Stop` | Once per session, if the repo changed but the memo did not, blocks and asks for the update. |
+| **enforce** | `Stop` | Once per session, if the repo changed but the memo or this session's note did not follow, blocks and asks. |
 
 The `Stop` hook only fires when the project actually moved — a dirty tree or a new `HEAD` in a
 repo, a file written since the session began anywhere else. Changes under `.claude/memory` itself
@@ -174,7 +174,7 @@ Two files, and the difference between them is the whole design:
 
 | File | Injected every session start? | Therefore |
 |---|---|---|
-| `PROJECT_CONTEXT.md` | **Yes** | Must stay short. You pay for it forever. |
+| `<project>_Context.md` | **Yes** | Must stay short. You pay for it forever. |
 | `sessions/Session_Context_<title>_<id>.md` | No — only its name and title are listed | Can hold the detail. Written once, read on demand. |
 
 Both are maintained by Claude, not by you.
@@ -229,7 +229,7 @@ is the one that gets the reasons wrong, and the reasons are the only part worth 
 first session there gets only the commit log. Write four lines and let Claude take over:
 
 ```bash
-mkdir -p .claude/memory && cat > .claude/memory/PROJECT_CONTEXT.md <<'EOF'
+mkdir -p .claude/memory && cat > .claude/memory/<project>_Context.md <<'EOF'
 # myproject — Context
 Updated: 2026-08-25
 
@@ -269,8 +269,8 @@ Per project, in `<project>/.claude/memory/`:
 
 | | |
 |---|---|
-| `PROJECT_CONTEXT.md` | The rolling memo. Injected every session start. |
-| `sessions/Session_Context_<title>_<id>.md` | One note per session. Listed at start, read on demand. |
+| `<project>_Context.md` | The rolling memo, named after the project directory. Injected every session start. Commit it. |
+| `sessions/Session_Context_<title>_<id>.md` | One note per session. Listed at start, read on demand. Commit these too. |
 | `SESSION_LOG.md` | One row per session. |
 | `backups/` | Pre-compaction transcripts, newest 5. |
 | `.starts` | One line per real injection. Backs the savings figure. |
@@ -283,7 +283,7 @@ Per project, in `<project>/.claude/memory/`:
 ```
 
 **Uninstall (`install.sh`):** it also touches `~/.claude/hooks/context-memory/`, four entries in
-`settings.json`, the `/memory-stats` command, a block in `CLAUDE.md`, and one line in the global
+`settings.json`, the `/memory-stats` command, a block in `CLAUDE.md`, and the memory entries in the global
 gitignore.
 
 ```bash

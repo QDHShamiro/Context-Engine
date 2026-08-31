@@ -22,14 +22,22 @@ fi
 
 MEM="$ROOT/.claude/memory"
 STAMP="$MEM/.session"
-CTX="$MEM/PROJECT_CONTEXT.md"
 
 [ -f "$STAMP" ] || exit 0
 [ -f "$MEM/.no-nag" ] && exit 0
 grep -qx nagged "$STAMP" 2>/dev/null && exit 0
 
-# Memo already touched since this session began -> nothing to ask for.
-[ -f "$CTX" ] && [ "$CTX" -nt "$STAMP" ] && exit 0
+# The rolling memo is named after the project directory; a memo still under the
+# old fixed name counts until SessionStart migrates it.
+CTX="$MEM/$(basename "$ROOT")_Context.md"
+[ -f "$CTX" ] || { [ -f "$MEM/PROJECT_CONTEXT.md" ] && CTX="$MEM/PROJECT_CONTEXT.md"; }
+
+# Both files are required once the project moved: the memo touched since this
+# session began, and a note for this session (its id is line 1 of the stamp).
+SID=$(sed -n 1p "$STAMP" 2>/dev/null | cut -c1-8)
+NOTE=$(ls "$MEM/sessions/"*_"${SID:-unknown}".md 2>/dev/null | head -1)
+MEMO_OK=; [ -f "$CTX" ] && [ "$CTX" -nt "$STAMP" ] && MEMO_OK=1
+[ -n "$MEMO_OK" ] && [ -n "$NOTE" ] && exit 0
 
 # Only worth asking if the session actually moved the project.
 if git -C "$ROOT" rev-parse HEAD >/dev/null 2>&1; then
@@ -51,5 +59,8 @@ else
 fi
 
 printf 'nagged\n' >> "$STAMP"
-echo "This session changed the project but $CTX was not updated. Follow the \`project-memory\` skill and update it now (one line per entry: what and why, plus anything still open), then finish." >&2
+MISS=""
+[ -n "$MEMO_OK" ] || MISS="the memo $CTX (one line per entry: what and why)"
+[ -n "$NOTE" ] || MISS="${MISS:+$MISS and }this session's note in $MEM/sessions/ (the detail and reasoning)"
+echo "This session changed the project but $MISS was not updated. Follow the \`project-memory\` skill and update it now, then finish." >&2
 exit 2

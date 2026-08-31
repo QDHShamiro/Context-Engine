@@ -9,7 +9,7 @@ SELF=$0; case "$SELF" in [A-Za-z]:*) SELF=$(cygpath -u "$SELF" 2>/dev/null || pr
 ROOT=$(ce_root)
 ce_debug "$ROOT"
 MEM=$(ce_memdir "$ROOT")
-CTX="$MEM/PROJECT_CONTEXT.md"
+CTX=$(ce_ctx "$MEM" "$ROOT")
 SDIR="$MEM/sessions"
 LOG=""
 
@@ -78,7 +78,8 @@ if [ "$MEMO_LINES" -gt 70 ]; then
 fi
 
 echo
-echo "_Context Engine. Keep .claude/memory/PROJECT_CONTEXT.md current as you work — one line per"
+echo "_Context Engine. Keep .claude/memory/$(basename "$CTX") current as you work — one line per"
 echo "finished feature, fix or decision: what and why. Detail belongs in this session's own note,"
-echo ".claude/memory/sessions/$SFILE. Load the \`project-memory\` skill before writing either._"
+echo ".claude/memory/sessions/$SFILE — both are required once the project changes. Load the"
+echo "\`project-memory\` skill before writing either._"
 exit 0
