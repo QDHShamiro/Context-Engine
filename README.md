@@ -121,8 +121,8 @@ the rules for writing the memo.
 | **enforce** | `Stop` | Once per session, if the repo changed but the memo did not, blocks and asks for the update. |
 
 The `Stop` hook only fires when the project actually moved — a dirty tree or a new `HEAD` in a
-repo, a file written since the session began anywhere else. A read-only question never triggers
-it. Opt out per project with `touch .claude/memory/.no-nag`.
+repo, a file written since the session began anywhere else. Changes under `.claude/memory` itself
+never count, so the hook's own files can't trigger it. A read-only question never triggers it. Opt out per project with `touch .claude/memory/.no-nag`.
 
 ---
 

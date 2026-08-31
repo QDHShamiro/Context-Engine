@@ -290,7 +290,9 @@ column in a normal terminal, which is exactly where the units and percentages we
 
 **A `Stop` hook that blocks needs its own loop guard.** Do not rely on a payload flag. Persist a
 marker (here: a `nagged` line appended to `.session`) and check it first. Gate blocking on real
-evidence of work — dirty tree or moved `HEAD` — or it fires after every read-only question.
+evidence of work — dirty tree or moved `HEAD` — or it fires after every read-only question. And
+exclude the hook's own output (`:(exclude).claude/memory`), or an untracked memory dir counts as
+evidence and it fires every session.
 
 **A `Stop` hook runs after every turn.** Budget accordingly: no stdin read, no interpreter spawn.
 Derive the project root from `$PWD` via `git rev-parse --show-toplevel`.

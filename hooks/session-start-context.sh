@@ -32,11 +32,11 @@ COMMITS=$(git -C "$ROOT" log -5 --format='%h %ad %s' --date=short 2>/dev/null)
 # can tell which one is worth opening without any of them being loaded.
 ARCHIVE=""
 if [ -d "$SDIR" ]; then
-  ARCHIVE=$(ls -1t "$SDIR"/Session_Context_*.md 2>/dev/null | head -6 | while IFS= read -r f; do
+  ARCHIVE=$(ls -1t "$SDIR"/Session_Context_*.md 2>/dev/null | while IFS= read -r f; do
     [ "$(basename "$f")" = "$SFILE" ] && continue
     printf '%s — %s\n' "$(basename "$f")" \
       "$(sed -n 's/^# *//p;/^# /q' "$f" 2>/dev/null | head -1)"
-  done)
+  done | head -6)
 fi
 
 # Nothing to say -> say nothing, so a scratch directory costs zero tokens.
@@ -68,6 +68,15 @@ fi
 # The standing instruction rides along here rather than in CLAUDE.md: a plugin
 # cannot write to the user's CLAUDE.md, and the skill only loads once triggered.
 # Two lines is the price of the memo being maintained at all.
+# A memo over budget quietly taxes every future session start; say so exactly
+# once, here, where the size is already known.
+MEMO_LINES=$(printf '%s' "$LOG" | wc -l)
+if [ "$MEMO_LINES" -gt 70 ]; then
+  echo
+  echo "_The memo above is $MEMO_LINES lines — over its ~60-line budget. Compress it this session:"
+  echo "move reasoning into session notes, keep only conclusions, delete anything no longer true._"
+fi
+
 echo
 echo "_Context Engine. Keep .claude/memory/PROJECT_CONTEXT.md current as you work — one line per"
 echo "finished feature, fix or decision: what and why. Detail belongs in this session's own note,"

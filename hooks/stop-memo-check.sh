@@ -33,7 +33,10 @@ grep -qx nagged "$STAMP" 2>/dev/null && exit 0
 
 # Only worth asking if the session actually moved the project.
 if git -C "$ROOT" rev-parse HEAD >/dev/null 2>&1; then
-  DIRTY=$(git -C "$ROOT" status --porcelain 2>/dev/null | head -1)
+  # The memory dir is excluded: the hooks' own stamp files and session notes
+  # must never count as "the project changed", or an untracked .claude/memory
+  # nags on every session in repos that don't gitignore it.
+  DIRTY=$(git -C "$ROOT" status --porcelain -- . ':(exclude).claude/memory' 2>/dev/null | head -1)
   HEAD_NOW=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)
   HEAD_THEN=$(sed -n 2p "$STAMP" 2>/dev/null || true)
   [ -n "$DIRTY" ] || [ "$HEAD_NOW" != "$HEAD_THEN" ] || exit 0
