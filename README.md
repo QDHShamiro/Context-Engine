@@ -12,13 +12,6 @@
   <img src="https://img.shields.io/badge/license-MIT-111111?style=flat-square" alt="MIT license">
 </p>
 
-<p align="center">
-  <strong>99.8% smaller pick-up &nbsp;·&nbsp; ~800 tokens instead of ~150,000</strong><br>
-  <sub>Measured from the token counts Claude Code already writes into its own transcripts — not
-  estimated, not extrapolated. <code>/memory-stats</code> counts only the session starts that
-  actually used it, so a fresh install reports zero and counts up.</sub>
-</p>
-
 ---
 
 ## The problem
@@ -26,40 +19,31 @@
 You open a repo you last touched three weeks ago. Claude knows nothing about it.
 
 So you either spend ten minutes re-explaining, or it spends them re-reading files. `claude --resume`
-replays the old session instead — the whole conversation, every tool result, at full price. On this
-machine that averages **145,000 tokens** before a single new word is typed.
+replays the old session instead — the whole conversation, every tool result, at full price.
 
 None of that is state. It is the transcript of how you arrived at the state.
 
 ## What it does
 
-```
-  WITHOUT                                WITH
-  ─────────────────────────────────      ─────────────────────────────────
-  claude --resume                        claude
-    replays the entire session             reads a 50-line memo
-    390,666 tokens                         944 tokens
-    most of it tool output                 all of it current state
-                                           99.8% less
-```
-
-Four hooks keep a short Markdown memo per project and inject it at session start. The detail lives
-in per-session notes that are **listed but never loaded** — so the archive costs nothing, and the
-memo it buys stays short.
+Every session writes one short note: what changed, why, what was tried and rejected, what is left
+open. At the next session start the last 5 commits and the earlier notes are **listed by title,
+never loaded** — so the archive costs a few lines, and Claude opens the one note it needs.
 
 ```
-  session start ──→  memo + last 5 commits injected          ~800 tokens
-        │            earlier session notes listed by title
+  session start ──→  last 5 commits + earlier notes listed by title
         │
-        ├──→  you work; Claude keeps the memo current as it goes
+        ├──→  you work; Claude writes this session's note as it goes
         │
    /compact ──→  full transcript copied to backups/ first
         │
-    /clear ──→  chat context dropped, memo injected again    ~800 tokens
+    /clear ──→  chat context dropped, notes listed again
         │       ← this is the reset button
         │
   session end ──→  one row in SESSION_LOG.md
 ```
+
+There is no rolling memo. A memo drifts — it reads as current long after it stopped being true, and
+you pay for it at every session start. A note is written once and read on demand.
 
 ---
 
@@ -82,7 +66,7 @@ cd Context-Engine
 bash install.sh
 ```
 
-Registers the same four hooks directly in `~/.claude/settings.json` and appends the memo rules to
+Registers the same four hooks directly in `~/.claude/settings.json` and appends the note rules to
 `~/.claude/CLAUDE.md` instead of shipping them as a skill.
 
 **Use one or the other, not both** — they register the same hooks and you would get each of them
@@ -95,9 +79,8 @@ What it does:
    execute a `.sh`, so the command becomes `"<abs path to bash.exe>" "<abs path to script>"`.
 3. Backs up `~/.claude/settings.json`, then **merges** its four entries in. Any hook group whose
    command does not contain `context-memory` is left untouched — existing hooks survive.
-4. Appends the memo-maintenance block to `~/.claude/CLAUDE.md`, between HTML markers.
-5. Installs the `/memory-stats` slash command.
-6. Adds `.claude/memory/` to git's global excludes.
+4. Appends the session-note block to `~/.claude/CLAUDE.md`, between HTML markers.
+5. Adds `.claude/memory/` to git's global excludes.
 
 Re-running replaces only its own entries. `CLAUDE_CONFIG_DIR` is honoured throughout.
 </details>
@@ -106,8 +89,7 @@ Re-running replaces only its own entries. `CLAUDE_CONFIG_DIR` is honoured throug
 Git for Windows. Git itself is optional — a plain directory works the same, it just has no commit
 log to inject.
 
-**Ships with:** four hooks, the `/memory-stats` command, and the `project-memory` skill that holds
-the rules for writing the memo.
+**Ships with:** four hooks and the `project-memory` skill that holds the rules for writing a note.
 
 ---
 
@@ -115,10 +97,10 @@ the rules for writing the memo.
 
 | | Fires on | What it does |
 |---|---|---|
-| **inject** | `SessionStart` — `startup\|clear\|compact\|resume` | Prints the memo, the last 5 commits, and an index of earlier session notes. `SessionStart` stdout goes straight into Claude's context. |
+| **inject** | `SessionStart` — `startup\|clear\|compact\|resume` | Prints the last 5 commits and an index of earlier session notes. `SessionStart` stdout goes straight into Claude's context. |
 | **backup** | `PreCompact` — `manual\|auto` | Copies the full transcript to `backups/` before compaction discards it. Keeps the newest 5. |
 | **log** | `SessionEnd` — all | One row per session: time, project, id, why it ended. |
-| **enforce** | `Stop` | Once per session, if the repo changed but the memo or this session's note did not follow, blocks and asks. |
+| **enforce** | `Stop` | Once per session, if the project changed but this session wrote no note, blocks and asks. |
 
 The `Stop` hook only fires when the project actually moved — a dirty tree or a new `HEAD` in a
 repo, a file written since the session began anywhere else. Changes under `.claude/memory` itself
@@ -126,123 +108,45 @@ never count, so the hook's own files can't trigger it. A read-only question neve
 
 ---
 
-## The numbers
+## The session note
 
-```
-  Context Engine
-
-    memo                  944   tokens, 54 lines
-    a resume          390,666   tokens
-                    ---------
-    saved per start   389,722   99.8% less, 413.8x
-
-    starts                  2   since today
-    saved so far      779,444   tokens
-
-  All projects
-
-    with a memo             2   of 22
-    starts                  3   since today
-
-  ============================================
-   SAVED BY CONTEXT ENGINE         853,980
-  ============================================
-```
-
-**Every figure is measured, and the honest one starts small.**
-
-- **The cold number is real.** Every assistant record in a transcript carries a `usage` block. The
-  script reads `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` from the last
-  one — that *is* what resuming costs.
-- **The total counts what happened.** Each session start that actually receives the memo appends a
-  line to `.claude/memory/.starts`, and the total sums only those. A figure covering every session
-  ever recorded would be a hypothesis dressed up as a measurement.
-- **Only the memo side is estimated**, at four characters per token.
-
-**What it does not claim:** only the *pick-up* changes. What a session grows to while you work is
-the same either way, and the memo summarises rather than replaces — the full transcript is still in
-`backups/` when you need the detail.
-
-`/memory-stats` reports this *and* brings the memo up to date in the same run. The command that
-tells you the memo is worth having is also the one that writes it.
-
----
-
-## The memo
-
-Two files, and the difference between them is the whole design:
-
-| File | Injected every session start? | Therefore |
-|---|---|---|
-| `<project>_Context.md` | **Yes** | Must stay short. You pay for it forever. |
-| `sessions/Session_Context_<title>_<id>.md` | No — only its name and title are listed | Can hold the detail. Written once, read on demand. |
-
-Both are maintained by Claude, not by you.
+`.claude/memory/sessions/Session_Context_<title>_<id>.md` — one per session, maintained by Claude.
 
 ```markdown
-# myproject — Context
-Updated: 2026-08-25
+# <one-line summary of what this session was about>
+Session: <id>   Date: <YYYY-MM-DD>
 
-## What this is
-One or two lines.
+## Done
+- <what changed, and where>
 
-## State
-- <what works now>
+## Why
+- <the reasoning behind each decision>
 
-## Decisions
-- <decision> — <why, one clause>
+## Tried and rejected
+- <approach> — <why it failed>
 
-## Open
-- <next thing, blocker, or deferred item>
+## Left open
+- <what the next session should pick up>
 ```
-
-**The rules, and why each one exists:**
 
 | Rule | Because |
 |---|---|
-| Written in English, whatever you speak | Re-read at every session start for the life of the project — the tokenisation gap compounds over hundreds of starts |
-| One line per entry: **what** and **why**, never *how* | The code already says how, and a memo describing implementation is wrong within a week |
-| Stale entries get **deleted**, not corrected underneath | A memo that reads as current and isn't is worse than none |
-| Under ~60 lines | Past that you have reinvented the transcript, at transcript prices |
-| No code, diffs, or logs | Git has the changelog, and the last 5 commits are injected right beside it |
+| **What** and **why**, never *how* | The code already says how |
+| No code, diffs, or logs | Git has the changelog, and the last 5 commits are injected beside the list |
+| Only what a future session would act on | Narration is noise the next reader has to skip |
 
-Session notes take everything that does not fit: the approach that failed and why, the constraint
-found the hard way, the reasoning a one-line decision can only conclude. They cost nothing because
-they are never loaded — only listed, so Claude knows one exists and can open it when an entry above
-is too terse to act on. Each is named after its session's title, and follows a rename.
+Each note is named after its session's title and follows a rename; the short id keeps it findable.
 
 ---
 
 ## Using it well
 
-**`/clear` is the reset button.** It drops the chat context; the hook puts the memo straight back.
-You carry on in the same terminal with the state and none of the accumulation. Nothing is lost —
-the transcript stays under `~/.claude/projects/`, and `claude --resume` still reaches it.
+**`/clear` is the reset button.** It drops the chat context; the hook lists the notes again. You
+carry on in the same terminal with the state and none of the accumulation. Nothing is lost — the
+transcript stays under `~/.claude/projects/`, and `claude --resume` still reaches it.
 
-**Keep it short — that is the entire trade.** Every line you add to the memo is a line you pay for
-in every future session in that repo.
-
-**Write it when the work lands.** A memo assembled from memory in the last two minutes of a session
-is the one that gets the reasons wrong, and the reasons are the only part worth keeping.
-
-**Seed old repos by hand.** A project you have worked in for months starts with an empty memo — the
-first session there gets only the commit log. Write four lines and let Claude take over:
-
-```bash
-mkdir -p .claude/memory && cat > .claude/memory/<project>_Context.md <<'EOF'
-# myproject — Context
-Updated: 2026-08-25
-
-## What this is
-One or two lines.
-
-## State
-- <what works now>
-
-## Open
-- <next thing or blocker>
-EOF
-```
+**Write the note when the work lands.** A note assembled from memory in the last two minutes of a
+session is the one that gets the reasons wrong, and the reasons are the only part worth keeping.
 
 **`SESSION_LOG.md` finds the session you want back.** It maps a timestamp to a session id;
 `claude --resume <id>` does the rest.
@@ -258,7 +162,7 @@ No config file. Three switches:
 
 | | |
 |---|---|
-| `touch .claude/memory/.no-nag` | Stop the memo check from blocking in this project |
+| `touch .claude/memory/.no-nag` | Stop the note check from blocking in this project |
 | `touch .claude/memory/.debug` | Append every raw hook payload to `hook-input.log` |
 | `CE_KEEP_BACKUPS` | Backups to keep. Default 5. Set it in `settings.json` under `env` |
 
@@ -269,11 +173,9 @@ Per project, in `<project>/.claude/memory/`:
 
 | | |
 |---|---|
-| `<project>_Context.md` | The rolling memo, named after the project directory. Injected every session start. Commit it. |
-| `sessions/Session_Context_<title>_<id>.md` | One note per session. Listed at start, read on demand. Commit these too. |
+| `sessions/Session_Context_<title>_<id>.md` | One note per session. Listed at start, read on demand. Commit them. |
 | `SESSION_LOG.md` | One row per session. |
 | `backups/` | Pre-compaction transcripts, newest 5. |
-| `.starts` | One line per real injection. Backs the savings figure. |
 | `.session` | Session stamp (id + HEAD) for the `Stop` check. |
 
 **Uninstall (plugin):**
@@ -283,11 +185,11 @@ Per project, in `<project>/.claude/memory/`:
 ```
 
 **Uninstall (`install.sh`):** it also touches `~/.claude/hooks/context-memory/`, four entries in
-`settings.json`, the `/memory-stats` command, a block in `CLAUDE.md`, and the memory entries in the global
+`settings.json`, a block in `CLAUDE.md`, and the memory entries in the global
 gitignore.
 
 ```bash
-rm -rf ~/.claude/hooks/context-memory ~/.claude/commands/memory-stats.md
+rm -rf ~/.claude/hooks/context-memory
 ```
 
 Then drop the four hook groups containing `context-memory` from `~/.claude/settings.json`, and the
@@ -362,11 +264,10 @@ usual cause, not the script.
 
 | | |
 |---|---|
-| `SessionStart` injection | Verified end-to-end — a real headless session repeated a token planted in the memo and the newest commit subject |
+| `SessionStart` injection | Verified end-to-end — a real headless session repeated the newest commit subject and a planted note title |
 | `SessionEnd` logging | Verified end-to-end; real payload captured, row written with the correct reason |
-| `Stop` memo check | All eight decision branches verified; confirmed it does not displace an existing `Stop` hook |
+| `Stop` note check | Every decision branch covered by `tests/smoke.sh`; confirmed it does not displace an existing `Stop` hook |
 | Session-note naming | All three cases: a retitle renames, an unreadable transcript leaves the name alone, a session with no note creates nothing |
-| Savings counting | Verified against a seeded `.starts` and an empty one, which reports zero rather than a hypothetical |
 | Backup retention | 8 stale + 1 new → newest 5 kept; `CE_KEEP_BACKUPS=2` honoured |
 | Fresh clone | LF endings intact, `bash -n` clean on every script |
 | `PreCompact` backup | Verified through the exact registered command line with realistic Windows-escaped payloads, both field spellings, and malformed input. **A real interactive `/compact` has not been observed** — headless `-p` mode does not compact, so that last link is untested. |

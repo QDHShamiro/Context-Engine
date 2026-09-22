@@ -107,47 +107,18 @@ Interfaces before implementations; verify each layer before building on it.
 2. **One hook script per event.** Each sources `_lib.sh`, does one thing, exits explicitly.
 3. **`install.sh`** — copy, merge, append, gitignore. Idempotent.
 4. **`claude-md-block.md`** — the instruction appended to `~/.claude/CLAUDE.md`.
-5. **`hooks/memory-stats.sh`** and the `/memory-stats` command file the installer writes to
-   `~/.claude/commands/`. Not a hook; it lives in `hooks/` only so the installer's `cp hooks/*.sh`
-   picks it up.
-6. **Verify** (section 7) before committing.
+5. **Verify** (section 7) before committing.
 
-### Two memory files, not one
+### Session notes only — no rolling memo
 
-`<project>_Context.md` is injected in full at every session start, so it must stay short.
-`sessions/Session_Context_<title>_<id>.md` is only ever *listed* - name and title line - so it can
-hold the detail. That asymmetry is the design: the archive is what earns the rolling memo the right
-to be brief. Never inject the archive itself; the moment you do, the saving is gone.
+There is no `<project>_Context.md` and no `PROJECT_CONTEXT.md`. A rolling memo drifts: it reads as
+current long after it stopped being true, and it is paid for at every session start. Each session
+writes `sessions/Session_Context_<title>_<id>.md` instead, and `SessionStart` only *lists* them -
+name and title line. Never inject a note in full.
 
 Name the note from the session's title and keep the short session id in the filename, so it stays
 findable across renames. Reconcile at session start *and* session end, since a title usually only
 settles partway through.
-
-### Measuring the saving
-
-Count what happened. A total over every session ever recorded includes the ones that predate the
-install and never saw a memo - that is a hypothesis presented as a measurement, and it is the
-number a reader will quote. Log each real injection and sum over the log; a fresh install should
-report zero and count up.
-
-Do not estimate the baseline, and do not put a number in the README you cannot regenerate.
-
-Every assistant record in a transcript carries a real `usage` block. The tokens a session was
-holding when it ended is `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`
-from the last such record — that is the cost of `claude --resume`, and therefore the honest
-baseline for what the memo replaces. Only the memo side is estimated (characters ÷ 4), and the
-output says so.
-
-Read the transcript from the tail. They reach 50 MB; seek to the last 1 MB, drop the partial first
-line, and scan only lines containing `"usage"`.
-
-Map a project root to its transcript directory by reading the `cwd` field out of a transcript, not
-by reconstructing Claude Code's directory slug. The slug encoding is undocumented and a wrong
-guess reports zero sessions instead of failing.
-
-State the boundary of the claim in the output itself: only the cold start improves, what a session
-accumulates while running is unchanged, and the memo is a summary rather than a replacement for
-the transcript.
 
 ### `_lib.sh` contract
 
@@ -211,7 +182,7 @@ removes the whole Windows `bash.exe` problem - no absolute interpreter path to d
 **A plugin cannot write to the user's `CLAUDE.md`.** Standing instructions have to arrive some
 other way, and there are only two: a skill, which loads on description match, and the `SessionStart`
 output, which is unconditional. Split them - the two-line rule that must always be in force rides
-in the injection, and the full ruleset lives in the skill for when the memo is actually being
+in the injection, and the full ruleset lives in the skill for when a note is actually being
 written. Do not put the whole ruleset in the injection; it is paid for at every session start.
 
 Validate before publishing - it catches manifest and component errors without an install:
@@ -327,7 +298,7 @@ printf ''         | bash hooks/session-start-context.sh; echo "exit=$?"
 **3. Project root from a subdirectory.** Pass a nested `cwd` and confirm the hook still finds the
 repo root.
 
-**4. Empty project.** No git, no memo → `SessionStart` must print nothing and exit 0.
+**4. Empty project.** No git, no session notes → `SessionStart` must print nothing and exit 0.
 
 **5. Through the registered command line**, not through `bash hooks/…`. This is what proves the
 `bash.exe` path, the quoting, and `$0` normalisation:
@@ -345,8 +316,8 @@ python -c "import json,io;h=json.load(io.open('$HOME/.claude/settings.json',enco
 [print('%-14s %-24s %s'%(e,g.get('matcher','(none)'),x['command'][:70])) for e,gs in h.items() for g in gs for x in g['hooks']]"
 ```
 
-**7. Real session, real injection.** The only test that proves the whole chain. Plant a token in a
-throwaway project's memo and make a real session repeat it:
+**7. Real session, real injection.** The only test that proves the whole chain. Plant a token in the
+title of a throwaway project's session note and make a real session repeat it:
 
 ```bash
 claude -p --model sonnet "Do not use tools. If a project memory block is in your context, reply with the MAGIC token in it, else NONE."
@@ -357,9 +328,6 @@ confirm the field names match what the parser expects.
 
 **9. Renames, all three ways.** Retitled session renames the note; an unreadable transcript leaves
 the existing name alone; a session with no note yet creates nothing.
-
-**10. Savings on an empty log.** With no recorded injections the report must say zero, not fall
-back to a figure derived from sessions that never used the memo.
 
 **11. Fresh clone.** Line endings and syntax:
 
@@ -405,7 +373,7 @@ for f in hooks/*.sh install.sh; do grep -qU $'\r' "$f" && echo "$f CRLF-BAD"; ba
 10. Every performance number is measured from data on disk and reproducible by a command the
     README names. State what was compared and what the claim excludes.
 11. Count what happened, never what would have. Zero is an honest first reading.
-12. Only the rolling memo is injected. The session archive is listed, never loaded.
+12. No rolling memo. Session notes are listed, never loaded.
 13. A failed read leaves existing data alone. Never let "unknown" overwrite "known".
 14. Run `claude plugin validate` on every manifest and component directory before publishing.
 15. Two install paths must never both register. The standalone installer refuses when the plugin
