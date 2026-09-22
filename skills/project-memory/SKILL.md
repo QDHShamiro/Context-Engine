@@ -1,67 +1,25 @@
 ---
 name: project-memory
 description: >
-  How to write and maintain a project's memory files under .claude/memory/ - the rolling
-  <project>_Context.md that is injected at every session start, and the per-session notes archived
-  beside it. Load this before creating or updating either file. Use when a feature lands, a bug is
-  fixed, an architecture or tooling decision is made, when the Stop hook asks for the memo to be
-  updated, when /memory-stats runs, or when the user says "update the project memory", "write the
-  memo", "project context", "session notes", or asks what an earlier session decided.
+  How to write a project's per-session notes under .claude/memory/sessions/. Load this before
+  creating or updating a session note. Use when a feature lands, a bug is fixed, an architecture or
+  tooling decision is made, when the Stop hook asks for a session note, or when the user says
+  "session notes", "update the project memory", or asks what an earlier session decided.
 ---
 
 # Project memory
 
-Every project carries its state in `.claude/memory/`. Two files, different jobs, and the difference
-is the whole point:
+A project keeps its history in `.claude/memory/sessions/`, one note per session. There is **no
+rolling memo**: no `PROJECT_CONTEXT.md`, no `<project>_Context.md`. Never create or update one.
 
-| File | Injected at session start? | Therefore |
-|---|---|---|
-| `<project>_Context.md` | **Yes, every time** | Must stay short. You pay for it forever. |
-| `sessions/Session_Context_<title>_<id>.md` | No — only its name is listed | Can hold the detail. Written once, read on demand. |
+The session-start injection names this session's note file and lists the last few earlier notes by
+name and title. None of them is injected in full; open one when you need it.
 
-Keep both current yourself. Nobody will ask. Both files are meant to be **committed with the
-repo** — they travel to every machine and clone; only the hooks' working files (backups, stamps,
-the session log) stay gitignored.
-
-## `<project>_Context.md` — the rolling state
-
-Named after the project directory (e.g. `MyPlugin_Context.md`). Where the project *is*, right now. Overwrite it as reality changes. Create it if missing:
-
-```markdown
-# <project> — Context
-Updated: <YYYY-MM-DD>
-
-## What this is
-One or two lines.
-
-## State
-- <what works now>
-
-## Decisions
-- <decision> — <why, one clause>
-
-## Open
-- <next thing, blocker, or deferred item>
-```
-
-- **Write it in English**, whatever language the conversation is in. It is re-read at every session
-  start for the life of the project; English tokenises tighter and reads back more accurately, so
-  the same meaning costs less every single time.
-- One line per entry. Say **what** and **why**, never **how** — the code already says how, and a
-  memo describing implementation is wrong within a week.
-- **Delete entries that stopped being true.** Never append a correction under a stale line; a memo
-  that reads as current and isn't is worse than no memo.
-- Under ~60 lines. Past that, compress the oldest `Decisions` into one line, or move the reasoning
-  into the session note and leave the conclusion here.
-- No code, no diffs, no logs, no file listings. Git has the changelog and the last five commits are
-  injected right beside this.
-
-## `sessions/Session_Context_<title>_<id>.md` — this session's notes
+## `sessions/Session_Context_<title>_<id>.md`
 
 One file per session, named after the session's own title. Rename the session and the file follows
-at the next session start or end; the short session id in the name is what keeps it findable. The
-session-start injection tells you this session's filename and lists the last few earlier ones by
-name and title. Write it as you go, not from memory at the end.
+at the next session start or end; the short session id in the name keeps it findable. Write it as
+you go, not from memory at the end.
 
 ```markdown
 # <one-line summary of what this session was about>
@@ -71,7 +29,7 @@ Session: <id>   Date: <YYYY-MM-DD>
 - <what changed, and where>
 
 ## Why
-- <the reasoning that <project>_Context.md only has room to conclude>
+- <the reasoning behind each decision>
 
 ## Tried and rejected
 - <approach> — <why it failed>
@@ -80,25 +38,15 @@ Session: <id>   Date: <YYYY-MM-DD>
 - <what the next session should pick up>
 ```
 
-This is where detail belongs: the failed approach worth not repeating, the constraint discovered
-the hard way, the exact reason a decision went the way it did. It is not injected, so length costs
-nothing — but it is only worth writing if a future session would act differently for having read
-it. Skip the narration.
+- Say **what** and **why**, never **how** — the code already says how.
+- No code, diffs, or logs.
+- Only worth writing if a future session would act differently for having read it. Skip narration.
 
-## Which file, when
+## Reading earlier notes
 
-- A feature lands, a bug is fixed, a decision is made → **both**: the conclusion in
-  `<project>_Context.md`, the reasoning in the session note.
-- An approach fails, a constraint surfaces, something surprises you → **session note only**.
-- Something in `<project>_Context.md` stops being true → **edit it there**, immediately.
+Before redoing something that might already have been tried, or when asked what an earlier session
+decided, open the matching note from `.claude/memory/sessions/` — listed under `## Earlier
+sessions`, or `ls -t` that folder for older ones.
 
-## Reading the archive
-
-`## Earlier sessions` in the injected block lists the recent session notes by name and title. When
-an entry in `<project>_Context.md` is too terse to act on, or you are about to redo something that
-might already have been tried, open the relevant file from `.claude/memory/sessions/` and read it
-before starting. That archive is the reason the rolling memo is allowed to be short.
-
-A `Stop` hook checks this once per session: if the repo changed but the memo or this session's
-note did not follow, it blocks and asks. Do not wait for that — a memo written at the end from memory is the one that
-gets the reasons wrong.
+A `Stop` hook checks once per session: if the project changed and this session has no note, it
+blocks and asks. Do not wait for that.

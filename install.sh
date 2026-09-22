@@ -57,7 +57,7 @@ MARK = "context-memory"
 # Stop takes no matcher: it always fires.
 SPECS = [
     # clear is the point of the whole thing: /clear drops the chat context and
-    # this puts the memo straight back, so it doubles as a reset button.
+    # this lists the session notes again, so it doubles as a reset button.
     ("SessionStart", "startup|clear|compact|resume", start_cmd, 15),
     ("PreCompact",   "manual|auto",            compact_cmd, 30),
     ("SessionEnd",   "*",                      end_cmd,     10),
@@ -93,37 +93,11 @@ io.open(claude_md, "w", encoding="utf-8").write(cur.rstrip() + "\n\n" + block + 
 print("CLAUDE.md: memory instruction block written")
 PY
 
-# 4. /memory-stats slash command ---------------------------------------------
-mkdir -p "$CLAUDE_DIR/commands"
-cat > "$CLAUDE_DIR/commands/memory-stats.md" <<CMD
----
-description: Show what the project memo saves, and bring the memo up to date
-allowed-tools: Bash(bash:*), Read, Write, Edit
----
-
-!\`bash "$DEST/memory-stats.sh" \$ARGUMENTS\`
-
-Show that output verbatim. The numbers come from the transcripts' own usage
-records - do not recompute, round, or embellish them.
-
-Then bring the current project's memo — \`.claude/memory/<project>_Context.md\`,
-named after the project directory — up to date with this session, without being
-asked again:
-
-- Missing? Create it, using the structure and rules in the project-memory block
-  of ~/.claude/CLAUDE.md.
-- Present? Add what this session changed, delete entries that stopped being
-  true rather than correcting them underneath, and refresh the Updated date.
-- One line per entry, what and why, never how. Under ~60 lines total. No code,
-  logs, or diffs.
-
-Finish with a single line saying what you added or removed, or that the memo was
-already current. The size shown above was measured before this update.
-CMD
-echo "command: /memory-stats installed"
+# 4. drop the /memory-stats command an earlier install left behind ---------
+rm -f "$CLAUDE_DIR/commands/memory-stats.md" "$DEST/memory-stats.sh"
 
 # 5. keep the memory's working files out of every repo ------------------------
-# The memo and session notes are MEANT to be committed - they travel with the
+# The session notes are MEANT to be committed - they travel with the
 # repo and survive a machine change. Only the hooks' own working state stays
 # ignored: transcript backups (megabytes), stamps, and the local session log.
 # Optional: the hooks work in directories that are not repos at all.
@@ -143,7 +117,7 @@ case "$GI_FILE" in [A-Za-z]:*) GI_FILE=$(cygpath -u "$GI_FILE") ;; esac
 mkdir -p "$(dirname "$GI_FILE")"
 touch "$GI_FILE"
 # An earlier install ignored the whole memory dir; that line would silently
-# keep the memo out of every repo, so drop it before adding the narrow ones.
+# keep the session notes out of every repo, so drop it before adding the narrow ones.
 if grep -qxF '.claude/memory/' "$GI_FILE"; then
   grep -vxF '.claude/memory/' "$GI_FILE" > "$GI_FILE.tmp" && mv "$GI_FILE.tmp" "$GI_FILE"
 fi
@@ -152,7 +126,7 @@ for pat in '.claude/memory/backups/' '.claude/memory/.session' '.claude/memory/.
            '.claude/memory/SESSION_LOG.md'; do
   grep -qxF "$pat" "$GI_FILE" || printf '%s\n' "$pat" >> "$GI_FILE"
 done
-echo "git: memory working files ignored globally via $GI_FILE (memo + session notes stay committable)"
+echo "git: memory working files ignored globally via $GI_FILE (session notes stay committable)"
 
 echo
 echo "Done. Restart Claude Code (or start a new session) for the hooks to load."
