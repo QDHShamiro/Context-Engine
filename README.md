@@ -12,6 +12,10 @@
   <img src="https://img.shields.io/badge/license-MIT-111111?style=flat-square" alt="MIT license">
 </p>
 
+> **Continued in [Lighting](https://github.com/QDHShamiro/Lighting).** Since Lighting 2.1, session notes,
+> project memory, a vault wiki and a code map live in one tool, written by a local model with no
+> hand-written notes. Context Engine still works as it is, but new work happens in Lighting.
+
 ---
 
 ## The problem
